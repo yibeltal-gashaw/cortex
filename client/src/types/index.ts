@@ -1,0 +1,160 @@
+export interface CredentialMatch {
+  type: string;
+  matchedText: string;
+  maskedText: string;
+  startIndex: number;
+  endIndex: number;
+  severity: 'high' | 'medium' | 'info';
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  promptPreview: string;
+  workspace: string;
+  workspacePath: string;
+  model: string;
+  createdAt: string;
+  updatedAt: string;
+  stepCount: number;
+  fileSizeBytes: number;
+  artifacts: {
+    hasPlan: boolean;
+    hasWalkthrough: boolean;
+    scratchCount: number;
+    uploadCount: number;
+    taskCount: number;
+    hasDb: boolean;
+  };
+}
+
+export interface EnvironmentSnapshot {
+  activeDocument?: {
+    path: string;
+    language?: string;
+  };
+  cursorLine?: number;
+  openDocuments: string[];
+  terminalProcesses: Array<{
+    command: string;
+    cwd?: string;
+    duration?: string;
+  }>;
+  browserPages?: string[];
+  localTime?: string;
+}
+
+export interface ToolCallItem {
+  id?: string;
+  name: string;
+  args: Record<string, any>;
+  result?: {
+    type: string;
+    status?: string;
+    exitCode?: number;
+    content?: string;
+    diff?: {
+      targetFile: string;
+      oldContent: string;
+      newContent: string;
+      startLine?: number;
+      endLine?: number;
+    };
+    viewedFile?: {
+      path: string;
+      startLine?: number;
+      endLine?: number;
+      content: string;
+    };
+  };
+}
+
+export interface TimelineStep {
+  stepIndex: number;
+  type: string;
+  source: string;
+  status: string;
+  createdAt: string;
+  userPrompt?: {
+    raw: string;
+    requestText: string;
+    credentialWarnings: CredentialMatch[];
+  };
+  environmentSnapshot?: EnvironmentSnapshot;
+  thinking?: string;
+  toolCalls?: ToolCallItem[];
+  assistantResponse?: string;
+  rawPayload?: any;
+}
+
+export interface ParsedConversationSession {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  durationMs: number;
+  durationFormatted: string;
+  model: string;
+  environmentSnapshot?: EnvironmentSnapshot;
+  toolStats: Record<string, number>;
+  totalSteps: number;
+  steps: TimelineStep[];
+}
+
+export interface FileTreeNode {
+  name: string;
+  relativePath: string;
+  type: 'file' | 'directory';
+  size?: number;
+  mtime?: string;
+  extension?: string;
+  children?: FileTreeNode[];
+}
+
+export interface ArtifactOverview {
+  tree: FileTreeNode;
+  hasPlan: boolean;
+  hasWalkthrough: boolean;
+  planContent?: string;
+  walkthroughContent?: string;
+  scratchFiles: Array<{ name: string; relativePath: string; size: number }>;
+  uploadedMedia: Array<{ name: string; relativePath: string; size: number; url: string }>;
+  taskLogs: Array<{ name: string; relativePath: string; size: number }>;
+}
+
+export interface ColumnInfo {
+  cid: number;
+  name: string;
+  type: string;
+  notnull: number;
+  dflt_value: any;
+  pk: number;
+}
+
+export interface TableSummary {
+  name: string;
+  rowCount: number;
+  columns: ColumnInfo[];
+}
+
+export interface FormattedBlob {
+  __isBlob: true;
+  size: number;
+  hex: string;
+  textPreview: string;
+}
+
+export interface DatabaseInfo {
+  exists: boolean;
+  tables: TableSummary[];
+  dbPath: string;
+}
+
+export interface AppStatus {
+  status: string;
+  dataDir: string;
+  defaultDataDir: string;
+  platform: string;
+  nodeVersion: string;
+}
+
+export * from './permissions.js';

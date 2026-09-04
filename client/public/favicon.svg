@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="cortex-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0E1626" />
+      <stop offset="100%" stop-color="#060A12" />
+    </linearGradient>
+
+    <!-- Border Hologram Gradient -->
+    <linearGradient id="cortex-rim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00E5FF" />
+      <stop offset="35%" stop-color="#3C91E6" />
+      <stop offset="70%" stop-color="#6D5DD1" />
+      <stop offset="100%" stop-color="#A855F7" />
+    </linearGradient>
+
+    <!-- Cognitive Teal Hemisphere -->
+    <linearGradient id="teal-hemisphere" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00FFEB" />
+      <stop offset="50%" stop-color="#3C91E6" />
+      <stop offset="100%" stop-color="#0284C7" />
+    </linearGradient>
+
+    <!-- Synapse Purple Hemisphere -->
+    <linearGradient id="purple-hemisphere" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C084FC" />
+      <stop offset="50%" stop-color="#6D5DD1" />
+      <stop offset="100%" stop-color="#4C1D95" />
+    </linearGradient>
+
+    <!-- Center Nexus Glow -->
+    <radialGradient id="nexus-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="25%" stop-color="#00FFC2" />
+      <stop offset="65%" stop-color="#00C48C" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#00C48C" stop-opacity="0" />
+    </radialGradient>
+
+    <filter id="cortex-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="1.2" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Cyber Squircle Badge -->
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#cortex-bg)" stroke="url(#cortex-rim)" stroke-width="2" />
+
+  <!-- Outer Stylized Cortex 'C' Shell -->
+  <path d="M46 16 C34 11 16 16 14 32 C12 48 34 53 46 48" 
+        stroke="url(#cortex-rim)" 
+        stroke-width="3" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"
+        filter="url(#cortex-glow)" />
+
+  <!-- Left Cognitive Hemisphere Neural Circuit Paths (Teal) -->
+  <path d="M30 18 C22 19 19 25 19 32 C19 39 22 45 30 46" 
+        stroke="url(#teal-hemisphere)" 
+        stroke-width="2.5" 
+        stroke-linecap="round" />
+  <path d="M25 25 C22 27 22 30 25 32 C28 34 26 38 23 39" 
+        stroke="url(#teal-hemisphere)" 
+        stroke-width="1.75" 
+        stroke-linecap="round" />
+  
+  <!-- Neural Nodes (Teal) -->
+  <circle cx="30" cy="18" r="1.8" fill="#00FFEB" />
+  <circle cx="23" cy="39" r="1.5" fill="#00FFEB" />
+  <circle cx="19" cy="32" r="1.5" fill="#3C91E6" />
+
+  <!-- Upper-Right Synaptic Branch (Purple) -->
+  <path d="M34 18 C38 18 43 20 44 24 C44 28 40 30 36 30" 
+        stroke="url(#purple-hemisphere)" 
+        stroke-width="2.2" 
+        stroke-linecap="round" />
+  <circle cx="44" cy="24" r="1.8" fill="#C084FC" />
+  <circle cx="34" cy="18" r="1.5" fill="#A855F7" />
+
+  <!-- Lower-Right Synaptic Branch (Purple) -->
+  <path d="M34 46 C38 46 43 44 44 40 C44 36 40 34 36 34" 
+        stroke="url(#purple-hemisphere)" 
+        stroke-width="2.2" 
+        stroke-linecap="round" />
+  <circle cx="44" cy="40" r="1.8" fill="#C084FC" />
+  <circle cx="34" cy="46" r="1.5" fill="#A855F7" />
+
+  <!-- Central Synaptic Nexus Burst (Emerald Spark) -->
+  <circle cx="32" cy="32" r="7" fill="url(#nexus-glow)" />
+  <!-- Radiant 4-Point Starburst -->
+  <path d="M32 24 L33.5 30.5 L40 32 L33.5 33.5 L32 40 L30.5 33.5 L24 32 L30.5 30.5 Z" 
+        fill="#00FFC2" 
+        filter="url(#cortex-glow)" />
+  <circle cx="32" cy="32" r="2" fill="#FFFFFF" />
+</svg>

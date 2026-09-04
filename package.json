@@ -1,0 +1,16 @@
+{
+  "name": "antigravity-conversation-tracker",
+  "version": "1.0.0",
+  "description": "Antigravity Conversation Tracker & Inspector - Local developer tool for inspecting Antigravity IDE agent conversations",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n \"SERVER,CLIENT\" -c \"blue,magenta\" \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build": "npm run build --prefix server && npm run build --prefix client",
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

@@ -6007,4 +6007,647 @@ input, textarea, select {
   }
 }
 
+/* ==========================================================================
+   CORTEX HUD - RESPONSIVE DESIGN SYSTEM & ADAPTIVE LAYOUT
+   ========================================================================== */
+
+/* Telemetry Drawer Close Button */
+.telemetry-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  margin-left: auto;
+  margin-right: 6px;
+  align-self: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.telemetry-close-btn:hover {
+  background-color: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+/* Backdrop Overlays for Mobile/Tablet Drawers */
+.hud-drawer-backdrop,
+.hud-telemetry-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 55;
+  animation: hudFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes hudFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Base Responsive Card & Table Overflows */
+.diff-viewer-container,
+.terminal-output,
+.markdown-body pre,
+.db-grid-container,
+.json-viewer-content {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* --------------------------------------------------------------------------
+   1. LAPTOP & COMPACT DESKTOP (<= 1200px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 1200px) {
+  .hud-session-drawer {
+    width: 260px;
+    min-width: 240px;
+    max-width: 270px;
+  }
+
+  .hud-telemetry-sidebar {
+    width: 280px;
+    min-width: 260px;
+    max-width: 290px;
+  }
+
+  .hud-breadcrumbs {
+    font-size: 12.5px;
+    gap: 6px;
+  }
+
+  .hud-session-title {
+    max-width: 220px;
+  }
+
+  .perm-page-content {
+    padding: 24px 24px 60px 24px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   2. TABLET PORTRAIT & COMPACT SCREENS (<= 1024px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+  /* Activate backdrop overlays on small screens */
+  .hud-drawer-backdrop.visible,
+  .hud-telemetry-backdrop.visible {
+    display: block;
+  }
+
+  /* Center pane expands to fill full viewport width */
+  .hud-center-pane {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Left Sidebar converts to an elevated slide-out drawer */
+  .hud-session-drawer {
+    position: fixed;
+    top: 0;
+    left: 58px;
+    bottom: 0;
+    width: 320px;
+    max-width: calc(100vw - 64px);
+    height: 100%;
+    height: 100dvh;
+    z-index: 60;
+    background-color: var(--bg-sidebar);
+    border-right: 1px solid var(--border-subtle);
+    box-shadow: 6px 0 28px rgba(0, 0, 0, 0.28);
+    transform: translateX(0);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+  }
+
+  .hud-session-drawer.collapsed {
+    display: flex !important;
+    transform: translateX(calc(-100% - 60px)) !important;
+    pointer-events: none;
+    box-shadow: none;
+  }
+
+  /* Right Telemetry Sidebar converts to an elevated slide-out drawer */
+  .hud-telemetry-sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 340px;
+    max-width: 90vw;
+    height: 100%;
+    height: 100dvh;
+    z-index: 60;
+    background-color: var(--bg-card);
+    border-left: 1px solid var(--border-subtle);
+    box-shadow: -6px 0 28px rgba(0, 0, 0, 0.28);
+    transform: translateX(0);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+  }
+
+  /* Artifacts Tab Right Tree Panel converts to slide-over drawer */
+  .artifacts-view {
+    position: relative;
+  }
+
+  .artifacts-tree-panel {
+    position: fixed;
+    top: 52px;
+    right: 0;
+    bottom: 0;
+    width: 310px;
+    max-width: 88vw;
+    height: calc(100% - 52px);
+    height: calc(100dvh - 52px);
+    z-index: 60;
+    background-color: var(--bg-sidebar);
+    border-left: 1px solid var(--border-subtle);
+    box-shadow: -6px 0 28px rgba(0, 0, 0, 0.28);
+    animation: drawerSlideInRight 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Database Tab Right Tables Sidebar converts to slide-over drawer */
+  .db-inspector {
+    position: relative;
+  }
+
+  .db-sidebar {
+    position: fixed;
+    top: 52px;
+    right: 0;
+    bottom: 0;
+    width: 290px;
+    max-width: 88vw;
+    height: calc(100% - 52px);
+    height: calc(100dvh - 52px);
+    z-index: 60;
+    background-color: var(--bg-sidebar);
+    border-left: 1px solid var(--border-subtle);
+    box-shadow: -6px 0 28px rgba(0, 0, 0, 0.28);
+    animation: drawerSlideInRight 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes drawerSlideInRight {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+
+  /* Permissions / Governance Page Tablet Layout */
+  .perm-page-nav-bar {
+    padding: 10px 20px;
+  }
+
+  .perm-page-content {
+    padding: 20px 20px 60px 20px;
+    gap: 18px;
+  }
+
+  .perm-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   3. MOBILE SMARTPHONES (<= 768px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  /* Root layout flips to column-reverse so NavRail becomes bottom bar */
+  .cortex-hud-root {
+    flex-direction: column-reverse;
+    height: 100vh;
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+  }
+
+  /* Bottom Thumb-Friendly Navigation Bar */
+  .hud-nav-rail {
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+    height: 56px;
+    min-height: 56px;
+    max-height: 56px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 10px;
+    border-right: none;
+    border-top: 1px solid var(--border-subtle);
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
+    order: 10;
+    position: relative;
+    z-index: 70;
+    background-color: var(--bg-card);
+  }
+
+  .rail-brand-slot {
+    margin-bottom: 0;
+  }
+
+  .rail-brain-logo {
+    width: 36px;
+    height: 36px;
+  }
+
+  .rail-action-group {
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+    gap: 8px;
+    flex: initial;
+  }
+
+  .rail-item {
+    width: 42px;
+    height: 42px;
+  }
+
+  .rail-divider {
+    display: none;
+  }
+
+  .rail-footer-group {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .rail-status-dot {
+    margin-top: 0;
+    margin-left: 2px;
+  }
+
+  .rail-tooltip {
+    display: none !important;
+  }
+
+  /* Body & Subview scale to fill remaining height */
+  .cortex-hud-body,
+  .cortex-hud-subview {
+    flex: 1;
+    height: calc(100vh - 56px);
+    height: calc(100dvh - 56px);
+    width: 100vw;
+    overflow: hidden;
+  }
+
+  /* Drawer positions docked from screen edge on mobile */
+  .hud-session-drawer {
+    left: 0;
+    width: 310px;
+    max-width: 88vw;
+    bottom: 56px;
+    height: calc(100% - 56px);
+    height: calc(100dvh - 56px);
+  }
+
+  .hud-session-drawer.collapsed {
+    transform: translateX(-100%) !important;
+  }
+
+  .hud-telemetry-sidebar {
+    bottom: 56px;
+    height: calc(100% - 56px);
+    height: calc(100dvh - 56px);
+    width: 320px;
+    max-width: 90vw;
+  }
+
+  .artifacts-tree-panel,
+  .db-sidebar {
+    top: 48px;
+    bottom: 56px;
+    height: calc(100% - 104px);
+    height: calc(100dvh - 104px);
+    width: 300px;
+    max-width: 88vw;
+  }
+
+  /* Compact HUD Top Header */
+  .hud-top-header {
+    height: 48px;
+    min-height: 48px;
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .hud-breadcrumbs {
+    font-size: 12px;
+    gap: 5px;
+  }
+
+  .hud-session-title {
+    max-width: clamp(100px, 36vw, 190px);
+  }
+
+  .hud-version-badge {
+    display: none;
+  }
+
+  .hud-action-icon-btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* Timeline Feed & Spine on Mobile */
+  .hud-timeline-filter-bar {
+    padding: 6px 12px;
+    gap: 6px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .hud-timeline-filter-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .filter-label {
+    flex-shrink: 0;
+    font-size: 11px;
+  }
+
+  .filter-pill {
+    flex-shrink: 0;
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  .hud-timeline-feed {
+    padding: 14px 10px 84px 10px;
+    gap: 12px;
+  }
+
+  .timeline-row-group {
+    gap: 8px;
+  }
+
+  .timeline-spine-col {
+    width: 20px;
+    min-width: 20px;
+    align-items: center;
+  }
+
+  .spine-timestamp {
+    display: none;
+  }
+
+  .spine-dot-wrap {
+    position: relative;
+    top: 10px;
+    right: auto;
+  }
+
+  .spine-vertical-line {
+    left: 9px;
+    right: auto;
+    top: 18px;
+  }
+
+  /* Timeline Cards & Bottom Input */
+  .hud-card {
+    border-radius: 10px;
+  }
+
+  .card-top-header {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .header-identity {
+    gap: 6px;
+  }
+
+  .avatar-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .hud-bottom-input-bar {
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 20px);
+    max-width: none;
+    height: 44px;
+    padding: 0 6px 0 12px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+  }
+
+  .hud-prompt-input {
+    font-size: 12.5px;
+  }
+
+  .input-attach-btn {
+    width: 26px;
+    height: 26px;
+  }
+
+  .input-send-btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* Artifacts Tab Mobile Adjustments */
+  .artifacts-content-panel {
+    padding: 14px 12px;
+  }
+
+  .artifact-image-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .artifact-image-controls {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .artifact-control-btn {
+    padding: 3px 7px;
+    font-size: 11px;
+  }
+
+  .media-gallery {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+  }
+
+  .media-img-wrapper {
+    height: 105px;
+  }
+
+  /* Database Tab Mobile Adjustments */
+  .db-inspector {
+    padding: 0;
+  }
+
+  .db-header {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .db-search-bar {
+    min-width: 140px;
+    flex: 1;
+  }
+
+  .db-pagination {
+    margin-left: auto;
+  }
+
+  .db-schema-bar {
+    padding: 6px 10px;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .db-schema-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .db-grid-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Skills & Permissions Mobile Adjustments */
+  .perm-page-nav-bar {
+    padding: 8px 12px;
+  }
+
+  .back-to-tracker-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+
+  .perm-page-content {
+    padding: 14px 12px 60px 12px;
+    gap: 14px;
+  }
+
+  .perm-hero-card {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .perm-hero-icon-box {
+    width: 42px;
+    height: 42px;
+  }
+
+  .perm-hero-title {
+    font-size: 16px;
+  }
+
+  .perm-hero-subtitle {
+    font-size: 12px;
+  }
+
+  .perm-metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .perm-page-tabs {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .perm-page-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Modals Mobile Scaling */
+  .modal-dialog,
+  .jit-modal-card {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    max-height: 88vh;
+    margin: 8px;
+    border-radius: 12px;
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding: 12px 14px;
+  }
+
+  .modal-footer {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .modal-footer button {
+    flex: 1;
+    min-width: 100px;
+  }
+
+  .jit-actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .jit-btn {
+    width: 100%;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   4. EXTRA COMPACT SMARTPHONES (<= 480px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 480px) {
+  .hud-workspace-crumb,
+  .hud-crumb-slash {
+    display: none;
+  }
+
+  .rail-item-docs {
+    display: none;
+  }
+
+  .hud-session-title {
+    max-width: 135px;
+  }
+
+  .live-shield-pill span:last-child {
+    display: none;
+  }
+
+  .brand-title {
+    font-size: 13.5px;
+  }
+
+  .brand-badge {
+    display: none;
+  }
+
+  .card-bottom-line {
+    font-size: 10px;
+    flex-wrap: wrap;
+  }
+
+  .back-to-tracker-btn span {
+    font-size: 11px;
+  }
+}
+
 

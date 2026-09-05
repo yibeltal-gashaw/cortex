@@ -108,7 +108,7 @@ export const NavRail: React.FC<NavRailProps> = ({
         </button> */}
 
         <button
-          className="rail-item"
+          className="rail-item rail-item-docs"
           title="Documentation & Guides"
           onClick={() => window.open('https://github.com', '_blank')}
         >

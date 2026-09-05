@@ -14,7 +14,8 @@ import {
   Layers,
   Calendar,
   Hash,
-  ArrowUpRight
+  ArrowUpRight,
+  X
 } from 'lucide-react';
 import { ParsedConversationSession, TimelineStep, ToolCallItem } from '../types/index.js';
 import { cleanFilePath, normalizeContent } from './DiffViewer.js';
@@ -35,7 +36,8 @@ interface ChangedFileInfo {
 export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
   session,
   selectedFile,
-  onSelectFile
+  onSelectFile,
+  onClose
 }) => {
   const [activeTab, setActiveTab] = useState<'details' | 'telemetry'>('details');
   const [copiedId, setCopiedId] = useState(false);
@@ -150,6 +152,17 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
         >
           Telemetry
         </button>
+        {onClose && (
+          <button
+            type="button"
+            className="telemetry-close-btn"
+            onClick={onClose}
+            title="Close details panel"
+            aria-label="Close details panel"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
 
       <div className="telemetry-scrollable-content">

@@ -51,9 +51,13 @@ const AppContent: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'timeline' | 'artifacts' | 'db'>('timeline');
   const [focusedFile, setFocusedFile] = useState<string | null>(null);
   const [loadingSession, setLoadingSession] = useState<boolean>(false);
-  const [isTelemetryOpen, setIsTelemetryOpen] = useState<boolean>(true);
+  const [isTelemetryOpen, setIsTelemetryOpen] = useState<boolean>(() => {
+    return typeof window !== 'undefined' ? window.innerWidth > 1024 : true;
+  });
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
-    return localStorage.getItem('cortex_sidebar_collapsed') === 'true';
+    const saved = localStorage.getItem('cortex_sidebar_collapsed');
+    if (saved !== null) return saved === 'true';
+    return typeof window !== 'undefined' ? window.innerWidth <= 1024 : false;
   });
 
   const toggleSidebar = () => {
@@ -179,12 +183,15 @@ const AppContent: React.FC = () => {
         onSelectView={(view) => {
           if (view === 'permissions') {
             setCurrentView('permissions');
+            if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
+              setIsSidebarCollapsed(true);
+            }
           } else {
             if (currentView === 'conversations') {
               toggleSidebar();
             } else {
               setCurrentView('conversations');
-              if (isSidebarCollapsed) {
+              if (isSidebarCollapsed && typeof window !== 'undefined' && window.innerWidth > 1024) {
                 setIsSidebarCollapsed(false);
                 localStorage.setItem('cortex_sidebar_collapsed', 'false');
               }
@@ -205,6 +212,26 @@ const AppContent: React.FC = () => {
         </div>
       ) : (
         <div className="cortex-hud-body">
+          {/* Mobile Backdrops for Left Drawer and Right Drawer */}
+          {!isSidebarCollapsed && (
+            <div
+              className="hud-drawer-backdrop visible"
+              onClick={() => {
+                setIsSidebarCollapsed(true);
+                localStorage.setItem('cortex_sidebar_collapsed', 'true');
+              }}
+              aria-label="Dismiss sidebar overlay"
+            />
+          )}
+
+          {isTelemetryOpen && (
+            <div
+              className="hud-telemetry-backdrop visible"
+              onClick={() => setIsTelemetryOpen(false)}
+              aria-label="Dismiss details overlay"
+            />
+          )}
+
           {/* Column 2: Sessions Drawer */}
           <Sidebar
             conversations={conversations}
@@ -219,6 +246,9 @@ const AppContent: React.FC = () => {
             onSelectConversation={(id, subTab = 'timeline') => {
               if (currentView !== 'conversations') {
                 setCurrentView('conversations');
+              }
+              if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
+                setIsSidebarCollapsed(true);
               }
               if (id === selectedId) {
                 setActiveSubTab(subTab);
@@ -302,7 +332,11 @@ const AppContent: React.FC = () => {
                 if (activeSubTab !== 'timeline') {
                   setActiveSubTab('timeline');
                 }
+                if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
+                  setIsTelemetryOpen(false);
+                }
               }}
+              onClose={() => setIsTelemetryOpen(false)}
             />
           )}
         </div>

@@ -19,8 +19,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { AppStatus } from '../types/index.js';
-import { updateDataDir } from '../api/index.js';
-import { DirectoryPickerModal } from './DirectoryPickerModal.js';
+import { updateDataDir, selectDirectoryNative } from '../api/index.js';
 
 interface SettingsPageProps {
   status: AppStatus | null;
@@ -57,8 +56,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 }) => {
   const [customPath, setCustomPath] = useState(status?.dataDir || '');
   const [saving, setSaving] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [isDirPickerOpen, setIsDirPickerOpen] = useState<boolean>(false);
 
   // Sync customPath when status changes
   useEffect(() => {
@@ -103,18 +102,24 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   };
 
   const handleBrowseDirectory = async () => {
-    if (typeof window !== 'undefined' && window.electronAPI?.selectDirectory) {
-      try {
+    setBrowsing(true);
+    try {
+      if (typeof window !== 'undefined' && window.electronAPI?.selectDirectory) {
         const picked = await window.electronAPI.selectDirectory(customPath || status?.dataDir || status?.defaultDataDir);
         if (picked) {
           setCustomPath(picked);
-          return;
         }
-      } catch (err) {
-        console.error('Failed to open Electron directory picker:', err);
+      } else {
+        const picked = await selectDirectoryNative(customPath || status?.dataDir || status?.defaultDataDir);
+        if (picked) {
+          setCustomPath(picked);
+        }
       }
+    } catch (err: any) {
+      console.error('Failed to open system directory picker:', err);
+    } finally {
+      setBrowsing(false);
     }
-    setIsDirPickerOpen(true);
   };
 
   return (
@@ -237,11 +242,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     type="button"
                     className="settings-browse-btn"
                     onClick={handleBrowseDirectory}
-                    title="Browse and select directory from folder system"
+                    disabled={browsing}
+                    title="Browse and select directory using system folder picker"
                     aria-label="Browse and select directory"
                   >
-                    <FolderOpen size={15} />
-                    <span>Browse...</span>
+                    {browsing ? (
+                      <>
+                        <Loader2 size={15} className="spin-icon" />
+                        <span>Opening...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FolderOpen size={15} />
+                        <span>Browse...</span>
+                      </>
+                    )}
                   </button>
                   <button
                     className="settings-save-btn"
@@ -462,14 +477,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           </section>
         </div>
       </div>
-
-      {/* Directory Picker Modal */}
-      <DirectoryPickerModal
-        isOpen={isDirPickerOpen}
-        initialPath={customPath || status?.dataDir || status?.defaultDataDir}
-        onClose={() => setIsDirPickerOpen(false)}
-        onSelect={(selectedPath) => setCustomPath(selectedPath)}
-      />
     </div>
   );
 };

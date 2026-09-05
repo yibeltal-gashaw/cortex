@@ -315,7 +315,9 @@ $f = New-Object System.Windows.Forms.FolderBrowserDialog
 $f.Description = 'Select Antigravity IDE Data Directory'
 $f.ShowNewFolderButton = $true
 if ('${sanitized}' -ne '') { $f.SelectedPath = '${sanitized}' }
-if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+$form = New-Object System.Windows.Forms.Form
+$form.TopMost = $true
+if ($f.ShowDialog($form) -eq [System.Windows.Forms.DialogResult]::OK) {
   Write-Output $f.SelectedPath
 }
 `.trim();

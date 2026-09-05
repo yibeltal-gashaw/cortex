@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { getDataDir } from '../config.js';
 
 export interface ConversationSummary {
@@ -70,15 +71,48 @@ function extractWorkspaceFromText(text: string): { name: string; fullPath: strin
   return { name: 'Default Workspace', fullPath: '' };
 }
 
+export function detectRealModel(conversationId: string, dataDir: string): string {
+  const dbPath = path.join(dataDir, 'conversations', `${conversationId}.db`);
+  if (!fs.existsSync(dbPath)) return '';
+  let db: any = null;
+  try {
+    db = new DatabaseSync(dbPath, { readOnly: true });
+    const tableExists = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='gen_metadata'").get();
+    if (!tableExists) return '';
+
+    const rows = db.prepare('SELECT data FROM gen_metadata ORDER BY idx DESC LIMIT 5').all() as Array<{ data: any }>;
+    for (const row of rows) {
+      if (!row.data) continue;
+      const str = Buffer.from(row.data).toString('utf8');
+      const friendlyMatch = str.match(/(?:Gemini|Claude|GPT)[\s0-9.a-zA-Z]+(?:\s*\([a-zA-Z]+\))?/);
+      if (friendlyMatch) {
+        return friendlyMatch[0].trim();
+      }
+      const idMatch = str.match(/(?:gemini|claude|gpt)-[a-zA-Z0-9_.-]+/i);
+      if (idMatch) {
+        return idMatch[0].trim();
+      }
+    }
+  } catch {
+    return '';
+  } finally {
+    if (db) {
+      try { db.close(); } catch {}
+    }
+  }
+  return '';
+}
+
 function extractModelFromText(text: string): string {
   const modelMatch = text.match(/setting `Model Selection` from .*? to ([^\r\n]+?)(?:\.\s*No need|\.\s*$|$)/i);
   if (modelMatch) {
     return modelMatch[1].trim();
   }
-  if (text.includes('Gemini 3.7 Flash')) return 'Gemini 3.7 Flash';
-  if (text.includes('Gemini 2.5 Pro')) return 'Gemini 2.5 Pro';
-  if (text.includes('Claude 3.7 Sonnet')) return 'Claude 3.7 Sonnet';
-  return 'Gemini 3.7 Flash';
+  const explicitMatch = text.match(/(?:Gemini|Claude|GPT)[\s0-9.a-zA-Z]+(?:\s*\([a-zA-Z]+\))?/);
+  if (explicitMatch) return explicitMatch[0].trim();
+  const idMatch = text.match(/(?:gemini|claude|gpt)-[a-zA-Z0-9_.-]+/i);
+  if (idMatch) return idMatch[0].trim();
+  return '';
 }
 
 function parsePromptAndTitle(content: string): { title: string; prompt: string } {
@@ -124,7 +158,7 @@ export function scanSingleConversation(conversationId: string, dataDir: string):
   let title = 'Conversation ' + conversationId.slice(0, 8);
   let workspace = 'Unknown Project';
   let workspacePath = '';
-  let model = 'Gemini 3.7 Flash';
+  let model = detectRealModel(conversationId, dataDir);
   let createdAt = new Date(mtimeMs).toISOString();
   let updatedAt = new Date(mtimeMs).toISOString();
   let stepCount = 0;
@@ -150,7 +184,9 @@ export function scanSingleConversation(conversationId: string, dataDir: string):
             const ws = extractWorkspaceFromText(firstStep.content);
             workspace = ws.name;
             workspacePath = ws.fullPath;
-            model = extractModelFromText(firstStep.content);
+            if (!model) {
+              model = extractModelFromText(firstStep.content);
+            }
           }
         } catch {
           // fallback

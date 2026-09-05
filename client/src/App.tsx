@@ -52,6 +52,34 @@ const AppContent: React.FC = () => {
   const [focusedFile, setFocusedFile] = useState<string | null>(null);
   const [loadingSession, setLoadingSession] = useState<boolean>(false);
   const [isTelemetryOpen, setIsTelemetryOpen] = useState<boolean>(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('cortex_sidebar_collapsed') === 'true';
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem('cortex_sidebar_collapsed', String(next));
+      return next;
+    });
+  };
+
+  // Keyboard shortcut Ctrl+B / Cmd+B to toggle sidebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || target?.isContentEditable) {
+          return;
+        }
+        e.preventDefault();
+        toggleSidebar();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
@@ -97,8 +125,9 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const selectConversation = async (id: string) => {
+  const selectConversation = async (id: string, subTab: 'timeline' | 'artifacts' | 'db' = 'timeline') => {
     setSelectedId(id);
+    setActiveSubTab(subTab);
     setLoadingSession(true);
     try {
       const [sessData, artData, dbData] = await Promise.all([
@@ -142,25 +171,24 @@ const AppContent: React.FC = () => {
     return 'Acme Platform';
   })();
 
-  const activeNavValue = currentView === 'permissions' ? 'permissions' : activeSubTab;
-
   return (
     <div className="cortex-hud-root">
       {/* 1. Far-Left Slim Icon Navigation Rail */}
       <NavRail
-        currentView={activeNavValue}
+        currentView={currentView}
         onSelectView={(view) => {
           if (view === 'permissions') {
             setCurrentView('permissions');
-          } else if (view === 'artifacts') {
-            setCurrentView('conversations');
-            setActiveSubTab('artifacts');
-          } else if (view === 'db') {
-            setCurrentView('conversations');
-            setActiveSubTab('db');
           } else {
-            setCurrentView('conversations');
-            setActiveSubTab('timeline');
+            if (currentView === 'conversations') {
+              toggleSidebar();
+            } else {
+              setCurrentView('conversations');
+              if (isSidebarCollapsed) {
+                setIsSidebarCollapsed(false);
+                localStorage.setItem('cortex_sidebar_collapsed', 'false');
+              }
+            }
           }
         }}
         theme={theme}
@@ -185,12 +213,24 @@ const AppContent: React.FC = () => {
             selectedWorkspace={selectedWorkspace}
             searchQuery={searchQuery}
             total={totalConversations}
-            onSelectConversation={selectConversation}
+            activeSubTab={activeSubTab}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={toggleSidebar}
+            onSelectConversation={(id, subTab = 'timeline') => {
+              if (currentView !== 'conversations') {
+                setCurrentView('conversations');
+              }
+              if (id === selectedId) {
+                setActiveSubTab(subTab);
+              } else {
+                selectConversation(id, subTab);
+              }
+            }}
             onSelectWorkspace={setSelectedWorkspace}
             onSearchChange={setSearchQuery}
             onNewSession={() => {
               if (conversations.length > 0) {
-                selectConversation(conversations[0].id);
+                selectConversation(conversations[0].id, 'timeline');
               }
             }}
           />
@@ -200,6 +240,8 @@ const AppContent: React.FC = () => {
             <HudHeader
               session={session}
               workspaceName={currentWorkspaceName}
+              isSidebarCollapsed={isSidebarCollapsed}
+              onToggleSidebar={toggleSidebar}
               isTelemetryOpen={isTelemetryOpen}
               onToggleTelemetry={() => setIsTelemetryOpen(prev => !prev)}
               onDeleteSession={() => setIsDeleteModalOpen(true)}
@@ -211,13 +253,33 @@ const AppContent: React.FC = () => {
                   <Loader2 size={32} className="spin-icon" />
                   <p>Streaming conversation state & artifacts...</p>
                 </div>
-              ) : activeSubTab === 'artifacts' && artifacts && session ? (
+              ) : activeSubTab === 'artifacts' && session ? (
                 <div className="hud-subtab-container">
-                  <ArtifactsTab conversationId={session.id} artifacts={artifacts} />
+                  {artifacts ? (
+                    <ArtifactsTab
+                      conversationId={session.id}
+                      artifacts={artifacts}
+                      isRightPanelOpen={isTelemetryOpen}
+                    />
+                  ) : (
+                    <div className="hud-loading-state">
+                      <p>No artifacts available for this session.</p>
+                    </div>
+                  )}
                 </div>
-              ) : activeSubTab === 'db' && dbInfo && session ? (
+              ) : activeSubTab === 'db' && session ? (
                 <div className="hud-subtab-container">
-                  <DatabaseTab conversationId={session.id} dbInfo={dbInfo} />
+                  {dbInfo ? (
+                    <DatabaseTab
+                      conversationId={session.id}
+                      dbInfo={dbInfo}
+                      isRightPanelOpen={isTelemetryOpen}
+                    />
+                  ) : (
+                    <div className="hud-loading-state">
+                      <p>No database available for this session.</p>
+                    </div>
+                  )}
                 </div>
               ) : session ? (
                 <Timeline steps={session.steps} conversationId={session.id} focusedFile={focusedFile} />
@@ -230,8 +292,8 @@ const AppContent: React.FC = () => {
             </div>
           </main>
 
-          {/* Column 4: Right Inspector & Telemetry Panel */}
-          {isTelemetryOpen && (
+          {/* Column 4: Right Inspector & Telemetry Panel (Only for Conversation) */}
+          {isTelemetryOpen && activeSubTab === 'timeline' && (
             <TelemetrySidebar
               session={session}
               selectedFile={focusedFile}

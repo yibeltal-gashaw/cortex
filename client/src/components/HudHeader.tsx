@@ -4,7 +4,9 @@ import {
   ChevronDown,
   Trash2,
   PanelRightClose,
-  PanelRightOpen
+  PanelRightOpen,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 import { ParsedConversationSession } from '../types/index.js';
 import { useAgentPermissions } from '../hooks/useAgentPermissions.js';
@@ -12,6 +14,8 @@ import { useAgentPermissions } from '../hooks/useAgentPermissions.js';
 interface HudHeaderProps {
   session: ParsedConversationSession | null;
   workspaceName?: string;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
   isTelemetryOpen: boolean;
   onToggleTelemetry: () => void;
   onDeleteSession: () => void;
@@ -20,6 +24,8 @@ interface HudHeaderProps {
 export const HudHeader: React.FC<HudHeaderProps> = ({
   session,
   workspaceName = 'Antigravity Workspace',
+  isSidebarCollapsed = false,
+  onToggleSidebar,
   isTelemetryOpen,
   onToggleTelemetry,
   onDeleteSession
@@ -56,6 +62,15 @@ export const HudHeader: React.FC<HudHeaderProps> = ({
     <header className="hud-top-header">
       {/* Left: Breadcrumbs & Session Title Dropdown */}
       <div className="hud-header-left">
+        {onToggleSidebar && (
+          <button
+            className={`hud-action-icon-btn ${isSidebarCollapsed ? 'sidebar-toggle-active' : ''}`}
+            title={isSidebarCollapsed ? 'Expand Sidebar (Ctrl+B)' : 'Collapse Sidebar (Ctrl+B)'}
+            onClick={onToggleSidebar}
+          >
+            {isSidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </button>
+        )}
         <div className="hud-breadcrumbs">
           <span className="hud-workspace-crumb">{workspaceName}</span>
           <span className="hud-crumb-slash">/</span>
@@ -69,7 +84,7 @@ export const HudHeader: React.FC<HudHeaderProps> = ({
           </div>
           {session?.model && (
             <span className="hud-version-badge" title={`Model: ${session.model}`}>
-              {session.model.includes('Flash') ? 'v3.7-flash' : session.model.slice(0, 10)}
+              {session.model}
             </span>
           )}
         </div>
@@ -97,7 +112,7 @@ export const HudHeader: React.FC<HudHeaderProps> = ({
 
         <button
           className={`hud-action-icon-btn ${isTelemetryOpen ? 'active' : ''}`}
-          title={isTelemetryOpen ? 'Hide Telemetry Panel' : 'Show Telemetry Panel'}
+          title={isTelemetryOpen ? 'Hide Right Panel' : 'Show Right Panel'}
           onClick={onToggleTelemetry}
         >
           {isTelemetryOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}

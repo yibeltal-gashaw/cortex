@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getDataDir } from '../config.js';
 import { scanForCredentials, CredentialMatch } from './credentialScanner.js';
+import { detectRealModel } from './conversationScanner.js';
 
 export interface EnvironmentSnapshot {
   activeDocument?: {
@@ -205,7 +206,7 @@ export function parseConversationTimeline(conversationId: string): ParsedConvers
     }
   }
 
-  let model = 'Gemini 3.7 Flash';
+  let model = detectRealModel(conversationId, dataDir);
   let initialEnvironmentSnapshot: EnvironmentSnapshot | undefined;
   const toolStats: Record<string, number> = {};
 

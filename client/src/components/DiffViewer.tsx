@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { diffLines, Change } from 'diff';
-import { Copy, Check, Columns, AlignLeft, FileCode, Maximize2, Minimize2, X } from 'lucide-react';
+import { Copy, Check, Columns, AlignLeft, FileCode, X } from 'lucide-react';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-typescript.js';
 import 'prismjs/components/prism-json.js';
@@ -268,14 +268,14 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             </button>
           </div>
 
-          <button
+          {/* <button
             className={`diff-fullscreen-btn ${inModal ? 'active' : ''}`}
             onClick={toggleFullscreen}
             title={inModal ? "Exit Fullscreen (Esc)" : "Expand Fullscreen"}
           >
             {inModal ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
             <span>{inModal ? 'Exit Fullscreen' : 'Fullscreen'}</span>
-          </button>
+          </button> */}
 
           {inModal && (
             <button

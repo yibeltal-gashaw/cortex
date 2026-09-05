@@ -141,6 +141,10 @@ export interface FormattedBlob {
   size: number;
   hex: string;
   textPreview: string;
+  summary?: string;
+  kind?: 'json' | 'protobuf' | 'text' | 'binary';
+  parsedJson?: any;
+  extractedStrings?: string[];
 }
 
 export interface DatabaseInfo {

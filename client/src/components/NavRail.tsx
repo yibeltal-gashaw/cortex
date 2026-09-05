@@ -1,22 +1,17 @@
 import React from 'react';
 import {
   Activity,
-  Layers,
-  Terminal,
-  Database,
   ShieldCheck,
-  BarChart3,
   BookOpen,
   Settings,
   Sun,
-  Moon,
-  FolderGit2
+  Moon
 } from 'lucide-react';
 import { AppStatus } from '../types/index.js';
 
 interface NavRailProps {
   currentView: string;
-  onSelectView: (view: 'conversations' | 'permissions' | 'artifacts' | 'db') => void;
+  onSelectView: (view: 'conversations' | 'permissions') => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
   onOpenSettings: () => void;
@@ -82,52 +77,35 @@ export const NavRail: React.FC<NavRailProps> = ({
           <span className="rail-tooltip">Governance</span>
         </button>
 
-        <button
-          className={`rail-item ${currentView === 'artifacts' ? 'active' : ''}`}
-          onClick={() => onSelectView('artifacts')}
-          title="Artifacts, Plans & Scratchpads"
-        >
-          <FolderGit2 size={20} />
-          <span className="rail-tooltip">Artifacts</span>
-        </button>
-
-        <button
-          className={`rail-item ${currentView === 'db' ? 'active' : ''}`}
-          onClick={() => onSelectView('db')}
-          title="SQLite Database Inspector"
-        >
-          <Database size={20} />
-          <span className="rail-tooltip">Database</span>
-        </button>
 
         <div className="rail-divider" />
 
-        <button
+        {/* <button
           className="rail-item"
           onClick={() => onSelectView('conversations')}
           title="Agent Workspaces & Clusters"
         >
           <Layers size={20} />
           <span className="rail-tooltip">Workspaces</span>
-        </button>
+        </button> */}
 
-        <button
+        {/* <button
           className="rail-item"
           title="Live Shell / Terminal Streams"
           onClick={() => onSelectView('conversations')}
         >
           <Terminal size={20} />
           <span className="rail-tooltip">Terminal</span>
-        </button>
+        </button> */}
 
-        <button
+        {/* <button
           className="rail-item"
           title="Telemetry & Agent Performance"
           onClick={() => onSelectView('conversations')}
         >
           <BarChart3 size={20} />
           <span className="rail-tooltip">Telemetry</span>
-        </button>
+        </button> */}
 
         <button
           className="rail-item"

@@ -3,6 +3,9 @@ import {
   FileText,
   CheckCircle2,
   Folder,
+  FolderOpen,
+  ChevronRight,
+  ChevronDown,
   FileCode,
   Image as ImageIcon,
   Terminal,
@@ -24,6 +27,7 @@ import { JsonViewerPanel } from './JsonViewerPanel.js';
 interface ArtifactsTabProps {
   conversationId: string;
   artifacts: ArtifactOverview;
+  isRightPanelOpen?: boolean;
 }
 
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.bmp', '.ico', '.avif']);
@@ -78,7 +82,8 @@ function preprocessMarkdownImages(md: string, convId: string): string {
 
 export const ArtifactsTab: React.FC<ArtifactsTabProps> = ({
   conversationId,
-  artifacts
+  artifacts,
+  isRightPanelOpen = true
 }) => {
   const [selectedPath, setSelectedPath] = useState<string>('implementation_plan.md');
   const [fileContent, setFileContent] = useState<string>(artifacts.planContent || '');
@@ -96,7 +101,12 @@ export const ArtifactsTab: React.FC<ArtifactsTabProps> = ({
   } | null>(null);
   const [zoom, setZoom] = useState<number>(100);
 
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => {
+    return new Set(['', artifacts?.tree?.relativePath || '']);
+  });
+
   useEffect(() => {
+    setExpandedFolders(new Set(['', artifacts?.tree?.relativePath || '']));
     if (artifacts.hasPlan) {
       setSelectedPath('implementation_plan.md');
       setFileContent(artifacts.planContent || '');
@@ -112,10 +122,36 @@ export const ArtifactsTab: React.FC<ArtifactsTabProps> = ({
     }
   }, [conversationId, artifacts]);
 
+  const toggleFolder = (folderPath: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(folderPath)) {
+        next.delete(folderPath);
+      } else {
+        next.add(folderPath);
+      }
+      return next;
+    });
+  };
+
   const loadFile = async (relPath: string) => {
     setSelectedPath(relPath);
     setLoading(true);
     setZoom(100);
+
+    // Automatically expand parent folders of this file
+    const parts = relPath.split('/');
+    if (parts.length > 1) {
+      setExpandedFolders(prev => {
+        const next = new Set(prev);
+        let curr = '';
+        for (let i = 0; i < parts.length - 1; i++) {
+          curr = curr ? `${curr}/${parts[i]}` : parts[i];
+          next.add(curr);
+        }
+        return next;
+      });
+    }
 
     const isImg = isImageFile(relPath);
     const isVid = isVideoFile(relPath);
@@ -177,9 +213,11 @@ export const ArtifactsTab: React.FC<ArtifactsTabProps> = ({
   const isMarkdown = selectedPath.endsWith('.md');
   const isImageGallery = selectedPath === '.user_uploaded';
 
-  // Recursive tree renderer
+  // Recursive tree renderer with collapsible folder support
   const renderTreeNode = (node: FileTreeNode, depth = 0) => {
     const isDir = node.type === 'directory';
+    const isExpanded = expandedFolders.has(node.relativePath);
+    const hasChildren = isDir && Boolean(node.children && node.children.length > 0);
     const isSelected = selectedPath === node.relativePath;
     const isScratch = node.relativePath.startsWith('scratch');
     const isTask = node.relativePath.includes('tasks');
@@ -201,98 +239,73 @@ export const ArtifactsTab: React.FC<ArtifactsTabProps> = ({
     }
 
     return (
-      <div key={node.relativePath} style={{ paddingLeft: `${depth * 14}px` }}>
+      <div key={node.relativePath} style={{ paddingLeft: `${depth * 14}px`, minWidth: 'max-content' }}>
         <div
           className={`tree-node-item ${isSelected ? 'selected' : ''}`}
           onClick={() => {
-            if (!isDir) {
+            if (isDir) {
+              toggleFolder(node.relativePath);
+              if (node.name === '.user_uploaded') {
+                setSelectedPath('.user_uploaded');
+                setMediaMeta(null);
+              }
+            } else {
               loadFile(node.relativePath);
-            } else if (node.name === '.user_uploaded') {
-              setSelectedPath('.user_uploaded');
-              setMediaMeta(null);
             }
           }}
+          title={isDir ? (isExpanded ? 'Click to collapse folder' : 'Click to expand folder') : node.relativePath}
         >
           {isDir ? (
-            <Folder size={14} color={iconColor} />
-          ) : isImg ? (
-            <ImageIcon size={14} color="var(--cortex-insight-amber)" />
-          ) : isJson || isJsonl ? (
-            <FileCode size={14} color="var(--cortex-synapse-purple)" />
-          ) : node.name.endsWith('.md') ? (
-            <FileText size={14} color="var(--cortex-execution-green)" />
-          ) : node.name.endsWith('.log') ? (
-            <Terminal size={14} color="var(--cortex-synapse-purple)" />
+            <>
+              {hasChildren ? (
+                isExpanded ? (
+                  <ChevronDown size={12} color="var(--cortex-grey-matter)" style={{ flexShrink: 0, marginRight: 2 }} />
+                ) : (
+                  <ChevronRight size={12} color="var(--cortex-grey-matter)" style={{ flexShrink: 0, marginRight: 2 }} />
+                )
+              ) : (
+                <span style={{ width: 14, flexShrink: 0 }} />
+              )}
+              {isExpanded ? (
+                <FolderOpen size={14} color={iconColor} style={{ flexShrink: 0 }} />
+              ) : (
+                <Folder size={14} color={iconColor} style={{ flexShrink: 0 }} />
+              )}
+            </>
           ) : (
-            <FileCode size={14} color={iconColor} />
+            <>
+              <span style={{ width: 14, flexShrink: 0 }} />
+              {isImg ? (
+                <ImageIcon size={14} color="var(--cortex-insight-amber)" style={{ flexShrink: 0 }} />
+              ) : isJson || isJsonl ? (
+                <FileCode size={14} color="var(--cortex-synapse-purple)" style={{ flexShrink: 0 }} />
+              ) : node.name.endsWith('.md') ? (
+                <FileText size={14} color="var(--cortex-execution-green)" style={{ flexShrink: 0 }} />
+              ) : node.name.endsWith('.log') ? (
+                <Terminal size={14} color="var(--cortex-synapse-purple)" style={{ flexShrink: 0 }} />
+              ) : (
+                <FileCode size={14} color={iconColor} style={{ flexShrink: 0 }} />
+              )}
+            </>
           )}
-          <span className="mono truncate" style={{ flex: 1, color: isScratch ? '#B45309' : 'inherit' }}>
+          <span className="mono" style={{ color: isScratch ? '#B45309' : 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}>
             {node.name}
           </span>
           {node.size !== undefined && (
-            <span style={{ fontSize: '10px', color: 'var(--cortex-grey-matter)' }}>
+            <span style={{ fontSize: '10px', color: 'var(--cortex-grey-matter)', marginLeft: '6px', whiteSpace: 'nowrap', flexShrink: 0 }}>
               {(node.size / 1024).toFixed(1)}k
             </span>
           )}
         </div>
 
-        {isDir && node.children && node.children.map(child => renderTreeNode(child, depth + 1))}
+        {isDir && isExpanded && node.children && node.children.map(child => renderTreeNode(child, depth + 1))}
       </div>
     );
   };
 
   return (
     <div className="artifacts-view">
-      <div className="artifacts-tree-panel">
-        <div style={{ padding: '6px 8px 12px 8px', borderBottom: '1px solid var(--cortex-grey-matter-border)', marginBottom: '8px' }}>
-          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--cortex-grey-matter)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Artifact Shortcuts
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
-            {artifacts.hasPlan && (
-              <button
-                className={`tree-node-item ${selectedPath === 'implementation_plan.md' ? 'selected' : ''}`}
-                onClick={() => loadFile('implementation_plan.md')}
-              >
-                <FileText size={14} color="var(--cortex-execution-green)" />
-                <span style={{ color: 'var(--cortex-deep-thought)', fontWeight: 600 }}>implementation_plan.md</span>
-              </button>
-            )}
-            {artifacts.hasWalkthrough && (
-              <button
-                className={`tree-node-item ${selectedPath === 'walkthrough.md' ? 'selected' : ''}`}
-                onClick={() => loadFile('walkthrough.md')}
-              >
-                <CheckCircle2 size={14} color="var(--cortex-execution-green)" />
-                <span style={{ color: 'var(--cortex-deep-thought)', fontWeight: 600 }}>walkthrough.md</span>
-              </button>
-            )}
-            {artifacts.uploadedMedia.length > 0 && (
-              <button
-                className={`tree-node-item ${selectedPath === '.user_uploaded' ? 'selected' : ''}`}
-                onClick={() => {
-                  setSelectedPath('.user_uploaded');
-                  setMediaMeta(null);
-                }}
-              >
-                <ImageIcon size={14} color="var(--cortex-insight-amber)" />
-                <span style={{ color: '#B45309', fontWeight: 600 }}>
-                  Uploaded Assets ({artifacts.uploadedMedia.length})
-                </span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div style={{ padding: '6px 8px' }}>
-          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--cortex-grey-matter)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Cortex Workspace Tree
-          </span>
-          <div style={{ marginTop: '8px' }}>
-            {renderTreeNode(artifacts.tree)}
-          </div>
-        </div>
-      </div>
+      
 
       <div className="artifacts-content-panel">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--cortex-grey-matter-border)', marginBottom: '20px' }}>
@@ -479,6 +492,60 @@ export const ArtifactsTab: React.FC<ArtifactsTabProps> = ({
           </pre>
         )}
       </div>
+      {isRightPanelOpen && (
+        <div className="artifacts-tree-panel">
+          <div style={{ padding: '6px 8px 12px 8px', borderBottom: '1px solid var(--cortex-grey-matter-border)', marginBottom: '8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--cortex-grey-matter)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Artifact Shortcuts
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+              {artifacts.hasPlan && (
+                <button
+                  className={`tree-node-item ${selectedPath === 'implementation_plan.md' ? 'selected' : ''}`}
+                  onClick={() => loadFile('implementation_plan.md')}
+                >
+                  <FileText size={14} color="var(--cortex-execution-green)" />
+                  <span style={{ color: 'var(--cortex-deep-thought)', fontWeight: 600 }}>implementation_plan.md</span>
+                </button>
+              )}
+              {artifacts.hasWalkthrough && (
+                <button
+                  className={`tree-node-item ${selectedPath === 'walkthrough.md' ? 'selected' : ''}`}
+                  onClick={() => loadFile('walkthrough.md')}
+                >
+                  <CheckCircle2 size={14} color="var(--cortex-execution-green)" />
+                  <span style={{ color: 'var(--cortex-deep-thought)', fontWeight: 600 }}>walkthrough.md</span>
+                </button>
+              )}
+              {artifacts.uploadedMedia.length > 0 && (
+                <button
+                  className={`tree-node-item ${selectedPath === '.user_uploaded' ? 'selected' : ''}`}
+                  onClick={() => {
+                    setSelectedPath('.user_uploaded');
+                    setMediaMeta(null);
+                  }}
+                >
+                  <ImageIcon size={14} color="var(--cortex-insight-amber)" />
+                  <span style={{ color: '#B45309', fontWeight: 600 }}>
+                    Uploaded Assets ({artifacts.uploadedMedia.length})
+                  </span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div style={{ padding: '6px 8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--cortex-grey-matter)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Cortex Workspace Tree
+            </span>
+            <div className="artifacts-tree-scroll" style={{ marginTop: '8px', overflowX: 'auto', paddingBottom: '6px' }}>
+              <div style={{ minWidth: 'max-content' }}>
+                {renderTreeNode(artifacts.tree)}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {activeMediaModal && (
         <div className="lightbox-modal" onClick={() => setActiveMediaModal(null)}>

@@ -329,11 +329,11 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                                 <CheckCircle2 size={14} />
                               </div>
                               <span className="header-title">Tool Execution: Edit File</span>
-                              {isFileFocused && (
+                              {/* {isFileFocused && (
                                 <span className="status-tag active-target">
                                   Selected File
                                 </span>
-                              )}
+                              )} */}
                             </div>
 
                             <div className="header-actions">

@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateTitleBarOverlay: (isDark) => {
     ipcRenderer.send('update-titlebar-theme', isDark);
   },
+  selectDirectory: (defaultPath) => ipcRenderer.invoke('select-directory', defaultPath),
 });

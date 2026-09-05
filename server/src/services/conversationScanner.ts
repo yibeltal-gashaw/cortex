@@ -26,6 +26,7 @@ export interface ConversationSummary {
 
 interface CacheEntry {
   mtimeMs: number;
+  fileSizeBytes: number;
   summary: ConversationSummary;
 }
 
@@ -149,7 +150,7 @@ export function scanSingleConversation(conversationId: string, dataDir: string):
 
   // Check cache
   const cached = summaryCache.get(conversationId);
-  if (cached && cached.mtimeMs === mtimeMs) {
+  if (cached && cached.mtimeMs === mtimeMs && cached.fileSizeBytes === fileSizeBytes) {
     return cached.summary;
   }
 
@@ -247,7 +248,7 @@ export function scanSingleConversation(conversationId: string, dataDir: string):
     }
   };
 
-  summaryCache.set(conversationId, { mtimeMs, summary });
+  summaryCache.set(conversationId, { mtimeMs, fileSizeBytes, summary });
   return summary;
 }
 

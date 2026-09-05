@@ -161,6 +161,22 @@ export interface AppStatus {
   nodeVersion: string;
 }
 
+export interface DirectoryItem {
+  name: string;
+  path: string;
+  hasAntigravityData: boolean;
+}
+
+export interface DirectoryBrowseResult {
+  currentPath: string;
+  parentPath: string | null;
+  hasAntigravityData: boolean;
+  homeDir: string;
+  defaultDataDir: string;
+  drives: string[];
+  directories: DirectoryItem[];
+}
+
 export * from './permissions.js';
 
 declare global {
@@ -169,6 +185,7 @@ declare global {
       platform: string;
       isElectron: boolean;
       updateTitleBarOverlay?: (isDark: boolean) => void;
+      selectDirectory?: (defaultPath?: string) => Promise<string | null>;
     };
   }
 }

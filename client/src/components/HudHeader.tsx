@@ -6,7 +6,8 @@ import {
   PanelRightClose,
   PanelRightOpen,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  RotateCw
 } from 'lucide-react';
 import { ParsedConversationSession } from '../types/index.js';
 import { useAgentPermissions } from '../hooks/useAgentPermissions.js';
@@ -19,6 +20,26 @@ interface HudHeaderProps {
   isTelemetryOpen: boolean;
   onToggleTelemetry: () => void;
   onDeleteSession: () => void;
+  isRefreshing?: boolean;
+  onRefreshSession?: () => void;
+  autoRefreshEnabled?: boolean;
+  lastRefreshed?: Date | null;
+}
+
+function formatRelativeTime(iso?: string): string {
+  if (!iso) return 'just now';
+  try {
+    const d = new Date(iso);
+    const now = new Date();
+    const diffSecs = Math.floor((now.getTime() - d.getTime()) / 1000);
+    if (diffSecs < 10) return 'just now';
+    if (diffSecs < 60) return `${diffSecs}s ago`;
+    const diffMins = Math.floor(diffSecs / 60);
+    if (diffMins < 60) return `${diffMins}m ago`;
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return 'recently';
+  }
 }
 
 export const HudHeader: React.FC<HudHeaderProps> = ({
@@ -28,7 +49,11 @@ export const HudHeader: React.FC<HudHeaderProps> = ({
   onToggleSidebar,
   isTelemetryOpen,
   onToggleTelemetry,
-  onDeleteSession
+  onDeleteSession,
+  isRefreshing = false,
+  onRefreshSession,
+  autoRefreshEnabled = true,
+  lastRefreshed = null
 }) => {
   const { interceptSkillExecution } = useAgentPermissions();
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -92,6 +117,17 @@ export const HudHeader: React.FC<HudHeaderProps> = ({
 
       {/* Right: Actions, Fullscreen, Notifications, Profile Avatar & Sidebar Toggle */}
       <div className="hud-header-right">
+        {onRefreshSession && (
+          <button
+            className={`hud-action-icon-btn ${isRefreshing ? 'active' : ''}`}
+            title={`Refresh active session (Ctrl+R / R)${autoRefreshEnabled ? ' • Live sync active' : ' • Live sync paused'}${lastRefreshed ? ` • Updated ${formatRelativeTime(lastRefreshed.toISOString())}` : ''}`}
+            onClick={onRefreshSession}
+            aria-label="Refresh active session"
+          >
+            <RotateCw size={15} className={isRefreshing ? 'spin-icon' : ''} />
+          </button>
+        )}
+
         <button
           className={`hud-action-icon-btn ${isFullscreen ? 'active' : ''}`}
           title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen Mode'}

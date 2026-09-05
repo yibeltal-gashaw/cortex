@@ -3,7 +3,8 @@ import {
   ConversationSummary,
   ParsedConversationSession,
   ArtifactOverview,
-  DatabaseInfo
+  DatabaseInfo,
+  DirectoryBrowseResult
 } from '../types/index.js';
 
 const API_BASE = '/api';
@@ -25,11 +26,18 @@ export async function updateDataDir(path: string): Promise<{ success: boolean; m
   return data;
 }
 
+export async function refreshCache(): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/refresh`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Failed to refresh cache: ${res.statusText}`);
+  return res.json();
+}
+
 export async function fetchConversations(options?: {
   searchQuery?: string;
   workspace?: string;
   limit?: number;
   offset?: number;
+  forceRefresh?: boolean;
 }): Promise<{
   conversations: ConversationSummary[];
   total: number;
@@ -40,6 +48,7 @@ export async function fetchConversations(options?: {
   if (options?.workspace && options.workspace !== 'all') params.set('workspace', options.workspace);
   if (options?.limit) params.set('limit', options.limit.toString());
   if (options?.offset) params.set('offset', options.offset.toString());
+  if (options?.forceRefresh) params.set('refresh', 'true');
 
   const res = await fetch(`${API_BASE}/conversations?${params.toString()}`);
   if (!res.ok) throw new Error(`Failed to fetch conversations: ${res.statusText}`);
@@ -102,4 +111,29 @@ export async function deleteConversation(id: string): Promise<{ success: boolean
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || 'Failed to delete conversation');
   return data;
+}
+
+export async function browseDirectory(path?: string): Promise<DirectoryBrowseResult> {
+  const params = new URLSearchParams();
+  if (path) params.set('path', path);
+  const res = await fetch(`${API_BASE}/browse-directory?${params.toString()}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to browse directory: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function selectDirectoryNative(defaultPath?: string): Promise<string | null> {
+  const res = await fetch(`${API_BASE}/select-directory-native`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ defaultPath })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to open native directory selector');
+  }
+  const data = await res.json();
+  return data.path || null;
 }

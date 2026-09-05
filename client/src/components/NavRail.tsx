@@ -15,6 +15,7 @@ interface NavRailProps {
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
   onOpenSettings: () => void;
+  isSettingsOpen?: boolean;
   status: AppStatus | null;
   executingCount?: number;
 }
@@ -25,6 +26,7 @@ export const NavRail: React.FC<NavRailProps> = ({
   theme,
   onToggleTheme,
   onOpenSettings,
+  isSettingsOpen = false,
   status,
   executingCount = 0
 }) => {
@@ -120,9 +122,11 @@ export const NavRail: React.FC<NavRailProps> = ({
       {/* Bottom: Settings, Theme Toggle, and Antigravity Status */}
       <div className="rail-footer-group">
         <button
-          className="rail-item"
+          className={`rail-item ${isSettingsOpen ? 'active' : ''}`}
           onClick={onOpenSettings}
           title={`Settings (Data Dir: ${status?.dataDir || 'Default'})`}
+          aria-label="Settings"
+          aria-current={isSettingsOpen ? 'page' : undefined}
         >
           <Settings size={20} />
           <span className="rail-tooltip">Settings</span>

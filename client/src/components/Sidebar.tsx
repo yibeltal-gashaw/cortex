@@ -110,6 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className={`drawer-filter-toggle ${showFilters ? 'active' : ''}`}
           onClick={() => setShowFilters(!showFilters)}
           title="Filter by Workspace"
+          aria-label="Filter by Workspace"
         >
           <SlidersHorizontal size={14} />
         </button>

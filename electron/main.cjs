@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, nativeTheme } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, nativeTheme, dialog } = require('electron');
 const path = require('path');
 
 // Enable experimental SQLite in Electron's Node runtime
@@ -111,6 +111,20 @@ ipcMain.on('update-titlebar-theme', (event, isDark) => {
       // Ignored if platform doesn't support
     }
   }
+});
+
+// Native folder picker dialog in Electron
+ipcMain.handle('select-directory', async (event, defaultPath) => {
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Antigravity IDE Data Directory',
+    defaultPath: defaultPath || undefined,
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+    return null;
+  }
+  return result.filePaths[0];
 });
 
 app.whenReady().then(async () => {

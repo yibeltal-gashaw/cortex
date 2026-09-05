@@ -162,3 +162,13 @@ export interface AppStatus {
 }
 
 export * from './permissions.js';
+
+declare global {
+  interface Window {
+    electronAPI?: {
+      platform: string;
+      isElectron: boolean;
+      updateTitleBarOverlay?: (isDark: boolean) => void;
+    };
+  }
+}

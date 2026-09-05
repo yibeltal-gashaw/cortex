@@ -4679,6 +4679,22 @@ input, textarea, select {
   gap: 10px;
 }
 
+/* Electron Window Titlebar Integration & Caption Controls Offset */
+.is-electron .hud-top-header {
+  -webkit-app-region: drag;
+  padding-right: 148px; /* Safe space for Windows native caption buttons (Min/Max/Close) */
+}
+
+.is-electron .hud-top-header button,
+.is-electron .hud-top-header a,
+.is-electron .hud-top-header input,
+.is-electron .hud-top-header select,
+.is-electron .hud-top-header .hud-action-icon-btn,
+.is-electron .hud-top-header .hud-breadcrumbs,
+.is-electron .hud-top-header .hud-session-title-wrap {
+  -webkit-app-region: no-drag;
+}
+
 .hud-header-right {
   display: flex;
   align-items: center;

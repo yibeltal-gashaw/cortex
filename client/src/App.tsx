@@ -88,11 +88,21 @@ const AppContent: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
 
-  // Apply theme to document root
+  // Apply theme to document root and sync with Electron titlebar overlay
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('cortex_theme', theme);
+    if (typeof window !== 'undefined' && window.electronAPI?.updateTitleBarOverlay) {
+      window.electronAPI.updateTitleBarOverlay(theme === 'dark');
+    }
   }, [theme]);
+
+  // Add is-electron class to root if running in desktop app
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.electronAPI?.isElectron) {
+      document.documentElement.classList.add('is-electron');
+    }
+  }, []);
 
   // Load initial status and conversation list
   useEffect(() => {

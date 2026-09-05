@@ -3,14 +3,52 @@
   "version": "1.0.0",
   "description": "Antigravity Conversation Tracker & Inspector - Local developer tool for inspecting Antigravity IDE agent conversations",
   "private": true,
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "concurrently -n \"SERVER,CLIENT\" -c \"blue,magenta\" \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "dev:server": "npm run dev --prefix server",
     "dev:client": "npm run dev --prefix client",
+    "dev:electron": "concurrently -n \"SERVER,CLIENT,ELECTRON\" -c \"blue,magenta,cyan\" \"npm run dev --prefix server\" \"npm run dev --prefix client\" \"wait-on http://127.0.0.1:5200 && electron .\"",
+    "electron:start": "electron .",
     "build": "npm run build --prefix server && npm run build --prefix client",
+    "build:all": "npm run build --prefix client && npm run build --prefix server",
+    "package:win": "npm run build:all && electron-builder --win --x64",
+    "package:mac": "npm run build:all && electron-builder --mac --x64",
+    "package:linux": "npm run build:all && electron-builder --linux",
     "install:all": "npm install && npm install --prefix server && npm install --prefix client"
   },
+  "build": {
+    "appId": "com.cortex.antigravitytracker",
+    "productName": "Cortex Tracker",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*",
+      "server/dist/**/*",
+      "server/node_modules/**/*",
+      "client/dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "client/public/favicon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Cortex Tracker"
+    }
+  },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "electron": "^44.2.0",
+    "electron-builder": "^26.15.3",
+    "wait-on": "^9.1.0"
   }
 }

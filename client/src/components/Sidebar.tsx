@@ -9,8 +9,7 @@ import {
   FolderGit2,
   Database,
   ChevronDown,
-  ChevronRight,
-  PanelLeftClose
+  ChevronRight
 } from 'lucide-react';
 import { ConversationSummary } from '../types/index.js';
 
@@ -59,7 +58,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   total,
   activeSubTab = 'timeline',
   isCollapsed = false,
-  onToggleCollapse,
   onSelectConversation,
   onSelectWorkspace,
   onSearchChange,
@@ -84,18 +82,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div>
             <h1 className="brand-title">CORTEX</h1>
           </div>
-          <span className="brand-badge">beta</span>
-          {onToggleCollapse && (
-            <button
-              type="button"
-              className="drawer-collapse-btn"
-              onClick={onToggleCollapse}
-              title="Collapse Sidebar (Ctrl+B)"
-              aria-label="Collapse Sidebar"
-            >
-              <PanelLeftClose size={15} />
-            </button>
-          )}
+          {/* <span className="brand-badge">v1.0</span> */}
         </div>
         <div className="drawer-divider" />
       </div>

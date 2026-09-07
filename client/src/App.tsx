@@ -9,7 +9,6 @@ import { DatabaseTab } from './components/DatabaseTab.js';
 import { DeleteModal } from './components/DeleteModal.js';
 import { SettingsPage } from './components/SettingsPage.js';
 import { PermissionsProvider } from './context/PermissionsContext.js';
-import { SkillsPermissionsPage } from './components/SkillsPermissionsPage.js';
 import { JitConsentModal } from './components/JitConsentModal.js';
 import { useAgentPermissions } from './hooks/useAgentPermissions.js';
 import {
@@ -29,7 +28,7 @@ import {
 import { Loader2, MessageSquare } from 'lucide-react';
 
 const AppContent: React.FC = () => {
-  const { currentView, setCurrentView, skills } = useAgentPermissions();
+  const { currentView, setCurrentView } = useAgentPermissions();
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('cortex_theme');
     return (saved === 'dark' || saved === 'light') ? saved : 'light';
@@ -294,8 +293,6 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const executingCount = Object.values(skills).filter((s) => s.status === 'executing').length;
-
   const currentWorkspaceName = (() => {
     if (selectedWorkspace !== 'all') return selectedWorkspace;
     if (session?.environmentSnapshot?.activeDocument?.path) {
@@ -342,16 +339,10 @@ const AppContent: React.FC = () => {
         }}
         isSettingsOpen={isSettingsOpen}
         status={status}
-        executingCount={executingCount}
       />
 
       {/* 2. Main Multi-Pane Content */}
-      {currentView === 'permissions' ? (
-        <div className="cortex-hud-subview">
-          <SkillsPermissionsPage />
-        </div>
-      ) : (
-        <div className="cortex-hud-body">
+      <div className="cortex-hud-body">
           {/* Mobile Backdrops for Left Drawer and Right Drawer */}
           {!isSidebarCollapsed && (
             <div
@@ -514,7 +505,6 @@ const AppContent: React.FC = () => {
             />
           )}
         </div>
-      )}
 
       {/* Modals & Dialogs */}
       {selectedId && (

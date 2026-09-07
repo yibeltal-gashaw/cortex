@@ -14,8 +14,6 @@ import {
   ChevronUp,
   Maximize2,
   Minimize2,
-  Paperclip,
-  Send,
   CheckCircle2,
   Terminal
 } from 'lucide-react';
@@ -70,7 +68,6 @@ function preprocessMarkdownImages(md: string, convId?: string): string {
 export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focusedFile }) => {
   const [filterType, setFilterType] = useState<'all' | 'user' | 'thinking' | 'tools' | 'response'>('all');
   const [copiedStep, setCopiedStep] = useState<number | null>(null);
-  const [promptInput, setPromptInput] = useState('');
   const [expandedReasoning, setExpandedReasoning] = useState<Record<number, boolean>>({});
   const [fullscreenDiffKey, setFullscreenDiffKey] = useState<string | null>(null);
 
@@ -527,7 +524,7 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
       </div>
 
       {/* 3. Floating Bottom Prompt Input Bar */}
-      <div className="hud-bottom-input-bar">
+      {/* <div className="hud-bottom-input-bar">
         <button className="input-attach-btn" title="Attach file or context">
           <Paperclip size={16} />
         </button>
@@ -549,7 +546,7 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
         >
           <Send size={15} />
         </button>
-      </div>
+      </div> */}
     </div>
   );
 };

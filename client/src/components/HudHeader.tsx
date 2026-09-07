@@ -128,14 +128,6 @@ export const HudHeader: React.FC<HudHeaderProps> = ({
           </button>
         )}
 
-        <button
-          className={`hud-action-icon-btn ${isFullscreen ? 'active' : ''}`}
-          title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen Mode'}
-          onClick={toggleFullscreen}
-        >
-          <Maximize2 size={16} />
-        </button>
-
         {session && (
           <button
             className="hud-action-icon-btn danger"

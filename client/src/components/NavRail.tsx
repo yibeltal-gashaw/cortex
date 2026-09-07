@@ -1,8 +1,6 @@
 import React from 'react';
 import {
   Activity,
-  ShieldCheck,
-  BookOpen,
   Settings,
   Sun,
   Moon
@@ -17,7 +15,6 @@ interface NavRailProps {
   onOpenSettings: () => void;
   isSettingsOpen?: boolean;
   status: AppStatus | null;
-  executingCount?: number;
 }
 
 export const NavRail: React.FC<NavRailProps> = ({
@@ -27,13 +24,12 @@ export const NavRail: React.FC<NavRailProps> = ({
   onToggleTheme,
   onOpenSettings,
   isSettingsOpen = false,
-  status,
-  executingCount = 0
+  status
 }) => {
   return (
     <nav className="hud-nav-rail" aria-label="Main Navigation">
       {/* Top: Cortex Brain Brand Logo */}
-      <div className="rail-brand-slot" title="Cortex HUD - Autonomous AI Agent">
+      <div className="rail-brand-slot" title="Cortex Brain">
         <div className="rail-brain-logo" onClick={() => onSelectView('conversations')}>
           <svg
             width="26"
@@ -68,55 +64,7 @@ export const NavRail: React.FC<NavRailProps> = ({
           <Activity size={20} />
           <span className="rail-tooltip">Activity Stream</span>
         </button>
-
-        <button
-          className={`rail-item ${currentView === 'permissions' ? 'active' : ''}`}
-          onClick={() => onSelectView('permissions')}
-          title="Skills & Permissions Governance Hub"
-        >
-          <ShieldCheck size={20} />
-          {executingCount > 0 && <span className="rail-badge-dot executing" />}
-          <span className="rail-tooltip">Governance</span>
-        </button>
-
-
         <div className="rail-divider" />
-
-        {/* <button
-          className="rail-item"
-          onClick={() => onSelectView('conversations')}
-          title="Agent Workspaces & Clusters"
-        >
-          <Layers size={20} />
-          <span className="rail-tooltip">Workspaces</span>
-        </button> */}
-
-        {/* <button
-          className="rail-item"
-          title="Live Shell / Terminal Streams"
-          onClick={() => onSelectView('conversations')}
-        >
-          <Terminal size={20} />
-          <span className="rail-tooltip">Terminal</span>
-        </button> */}
-
-        {/* <button
-          className="rail-item"
-          title="Telemetry & Agent Performance"
-          onClick={() => onSelectView('conversations')}
-        >
-          <BarChart3 size={20} />
-          <span className="rail-tooltip">Telemetry</span>
-        </button> */}
-
-        <button
-          className="rail-item rail-item-docs"
-          title="Documentation & Guides"
-          onClick={() => window.open('https://github.com', '_blank')}
-        >
-          <BookOpen size={20} />
-          <span className="rail-tooltip">Docs</span>
-        </button>
       </div>
 
       {/* Bottom: Settings, Theme Toggle, and Antigravity Status */}

@@ -19,7 +19,7 @@
   },
   "build": {
     "appId": "com.cortex.antigravitytracker",
-    "productName": "Cortex Tracker",
+    "productName": "Cortex",
     "directories": {
       "output": "dist-electron"
     },

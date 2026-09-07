@@ -8,7 +8,7 @@ import { scanAllConversations, invalidateCache } from '../services/conversationS
 import { parseConversationTimeline } from '../services/timelineParser.js';
 import { getArtifactsOverview, readArtifactFile, getMediaFilePath, getArtifactFilePath } from '../services/artifactService.js';
 import { inspectDatabase, queryTableRows } from '../services/dbInspector.js';
-import { deleteConversation } from '../services/deletionService.js';
+import { deleteConversation, deleteConversations } from '../services/deletionService.js';
 
 export const apiRouter = Router();
 
@@ -205,6 +205,21 @@ apiRouter.delete('/conversations/:id', (req, res) => {
       res.status(400).json(result);
       return;
     }
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Batch Permanent Deletion
+apiRouter.post('/conversations/batch-delete', (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    res.status(400).json({ error: 'ids array is required and must not be empty' });
+    return;
+  }
+  try {
+    const result = deleteConversations(ids);
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

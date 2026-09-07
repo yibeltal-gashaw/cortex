@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   X,
@@ -9,9 +9,11 @@ import {
   FolderGit2,
   Database,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from 'lucide-react';
 import { ConversationSummary } from '../types/index.js';
+import { DeleteModal } from './DeleteModal.js';
 
 interface SidebarProps {
   conversations: ConversationSummary[];
@@ -27,6 +29,7 @@ interface SidebarProps {
   onSelectWorkspace: (workspace: string) => void;
   onSearchChange: (query: string) => void;
   onNewSession?: () => void;
+  onDeleteConversations?: (ids: string[]) => void;
 }
 
 function formatRelativeTime(iso: string): string {
@@ -61,15 +64,63 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectConversation,
   onSelectWorkspace,
   onSearchChange,
+  onDeleteConversations,
 }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(selectedId);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (selectedId) {
       setExpandedId(selectedId);
     }
   }, [selectedId]);
+
+  // Prune any selected IDs that are no longer in conversations
+  useEffect(() => {
+    setSelectedIds(prev => {
+      if (prev.size === 0) return prev;
+      const validIds = new Set(conversations.map(c => c.id));
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (validIds.has(id)) next.add(id);
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [conversations]);
+
+  const visibleIds = conversations.map(c => c.id);
+  const selectedCount = selectedIds.size;
+  const isAllSelected = conversations.length > 0 && visibleIds.every(id => selectedIds.has(id));
+  const hasSomeSelected = selectedCount > 0 && !isAllSelected;
+
+  useEffect(() => {
+    if (selectAllCheckboxRef.current) {
+      selectAllCheckboxRef.current.indeterminate = hasSomeSelected;
+    }
+  }, [hasSomeSelected]);
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleIds));
+    }
+  };
+
+  const handleToggleCard = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   return (
     <aside className={`hud-session-drawer ${isCollapsed ? 'collapsed' : ''}`} aria-hidden={isCollapsed}>
@@ -142,6 +193,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
 
+      {/* 3.5 Selection & Bulk Actions Bar */}
+      {conversations.length > 0 && (
+        <div className={`drawer-selection-bar ${selectedCount > 0 ? 'has-selected' : ''}`}>
+          <label className="drawer-select-all-label" title={isAllSelected ? "Deselect all sessions" : "Select all sessions"}>
+            <input
+              type="checkbox"
+              ref={selectAllCheckboxRef}
+              className="cortex-checkbox"
+              checked={isAllSelected}
+              onChange={handleToggleSelectAll}
+            />
+            <span className="drawer-select-all-text">
+              {selectedCount > 0 ? (
+                <>
+                  <span className="drawer-select-count">{selectedCount}</span> of {conversations.length} selected
+                </>
+              ) : (
+                `Select all (${conversations.length})`
+              )}
+            </span>
+          </label>
+
+          {selectedCount > 0 && (
+            <div className="drawer-selection-actions">
+              <button
+                type="button"
+                className="drawer-selection-clear-btn"
+                onClick={() => setSelectedIds(new Set())}
+                title="Clear selection"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                className="drawer-bulk-delete-btn"
+                onClick={() => setIsDeleteModalOpen(true)}
+                title={`Delete ${selectedCount} selected session${selectedCount > 1 ? 's' : ''}`}
+              >
+                <Trash2 size={12} />
+                <span>Delete {selectedCount === conversations.length ? 'All' : `(${selectedCount})`}</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 4. Session Cards List with Collapsible Tabs */}
       <div className="drawer-session-list">
         {conversations.length === 0 ? (
@@ -152,11 +249,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           conversations.map((c) => {
             const isSelected = c.id === selectedId;
             const isExpanded = expandedId === c.id;
+            const isChecked = selectedIds.has(c.id);
 
             return (
               <div
                 key={c.id}
-                className={`hud-session-card ${isSelected ? 'selected' : ''}`}
+                className={`hud-session-card ${isSelected ? 'selected' : ''} ${isChecked ? 'card-checked' : ''}`}
               >
                 <div
                   className="card-main-area"
@@ -167,6 +265,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                   <div className="card-top-line">
                     <div className="card-title-group">
+                      <input
+                        type="checkbox"
+                        className="cortex-checkbox card-item-checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleToggleCard(c.id);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        title={isChecked ? `Deselect "${c.title || c.id}"` : `Select "${c.title || c.id}"`}
+                        aria-label={`Select session ${c.title || c.id}`}
+                      />
                       <span className={`card-status-dot ${isSelected ? 'active' : ''}`} />
                       <span className="card-heading truncate" title={c.title}>
                         {c.title || 'Untitled Session'}
@@ -262,6 +372,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <ArrowRight size={13} />
         </button>
       </div>
+
+      {/* Batch / Select-All Delete Confirmation Modal */}
+      <DeleteModal
+        conversationIds={Array.from(selectedIds)}
+        conversationTitles={conversations.reduce((acc, cur) => {
+          acc[cur.id] = cur.title || cur.id;
+          return acc;
+        }, {} as Record<string, string>)}
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onDeleted={(deletedIds: string[]) => {
+          const idsArray = Array.isArray(deletedIds) ? deletedIds : [deletedIds];
+          setSelectedIds(new Set());
+          setIsDeleteModalOpen(false);
+          onDeleteConversations?.(idsArray);
+        }}
+      />
     </aside>
   );
 };

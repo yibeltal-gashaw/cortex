@@ -1537,7 +1537,7 @@ select {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 99999;
   animation: fadeIn 0.15s ease-out;
 }
 
@@ -4797,6 +4797,202 @@ select {
   padding: 0 8px;
   color: var(--text-secondary);
   outline: none;
+}
+
+/* Multi-selection & Bulk Delete Bar */
+.drawer-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 6px;
+  transition: all 0.2s ease;
+  min-height: 32px;
+}
+
+.drawer-selection-bar.has-selected {
+  background: var(--cortex-memory-wipe-bg);
+  border: 1px solid var(--cortex-memory-wipe-border);
+  border-radius: 8px;
+  margin: 0 10px 8px 10px;
+  padding: 5px 10px;
+}
+
+.drawer-select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: color 0.15s ease;
+}
+
+.drawer-select-all-label:hover {
+  color: var(--text-primary);
+}
+
+.drawer-select-all-text {
+  font-size: 11px;
+  letter-spacing: 0.2px;
+}
+
+.drawer-select-count {
+  font-weight: 700;
+  color: var(--cortex-memory-wipe);
+}
+
+.drawer-selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drawer-selection-clear-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.drawer-selection-clear-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+}
+
+.drawer-bulk-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid var(--cortex-memory-wipe-border);
+  background: var(--cortex-memory-wipe-bg);
+  color: var(--cortex-memory-wipe);
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.12);
+}
+
+.drawer-bulk-delete-btn:hover {
+  background: var(--cortex-memory-wipe);
+  color: #FFFFFF;
+  border-color: var(--cortex-memory-wipe);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.45);
+  transform: translateY(-1px);
+}
+
+/* Custom Cybernetic Checkbox */
+.cortex-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  min-height: 14px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border-default);
+  background-color: var(--bg-card);
+  cursor: pointer;
+  margin: 0;
+  outline: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.cortex-checkbox:hover {
+  border-color: var(--cortex-synapse-purple);
+  box-shadow: 0 0 4px rgba(99, 102, 241, 0.25);
+}
+
+.cortex-checkbox:checked {
+  background-color: var(--cortex-synapse-purple);
+  border-color: var(--cortex-synapse-purple);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 11px 11px;
+}
+
+.cortex-checkbox:indeterminate {
+  background-color: var(--cortex-synapse-purple);
+  border-color: var(--cortex-synapse-purple);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='3' y='7' width='10' height='2' rx='1'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 11px 11px;
+}
+
+/* Card Checkbox specific */
+.card-item-checkbox {
+  opacity: 0.6;
+  margin-right: 2px;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.hud-session-card:hover .card-item-checkbox,
+.card-item-checkbox:checked {
+  opacity: 1;
+}
+
+.hud-session-card.card-checked {
+  background-color: rgba(99, 102, 241, 0.06);
+  border-color: rgba(99, 102, 241, 0.22);
+}
+
+/* Batch Delete Modal Preview */
+.batch-delete-preview-list {
+  max-height: 150px;
+  overflow-y: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-subtle);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 8px 0;
+}
+
+.batch-delete-preview-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+}
+
+.batch-preview-title {
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 270px;
+}
+
+.batch-preview-id {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 8px;
+  flex-shrink: 0;
 }
 
 .drawer-session-list {

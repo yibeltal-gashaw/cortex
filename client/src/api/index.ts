@@ -113,6 +113,53 @@ export async function deleteConversation(id: string): Promise<{ success: boolean
   return data;
 }
 
+export async function deleteConversations(ids: string[]): Promise<{
+  success: boolean;
+  totalDeleted: number;
+  failedIds: string[];
+  deletedItems: string[];
+}> {
+  try {
+    const res = await fetch(`${API_BASE}/conversations/batch-delete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ ids })
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('Batch delete endpoint failed, falling back to sequential delete:', err);
+  }
+
+  let totalDeleted = 0;
+  const failedIds: string[] = [];
+  const deletedItems: string[] = [];
+
+  for (const id of ids) {
+    try {
+      const res = await deleteConversation(id);
+      if (res.success) {
+        totalDeleted++;
+        deletedItems.push(...res.deletedItems);
+      } else {
+        failedIds.push(id);
+      }
+    } catch {
+      failedIds.push(id);
+    }
+  }
+
+  return {
+    success: failedIds.length === 0,
+    totalDeleted,
+    failedIds,
+    deletedItems
+  };
+}
+
 export async function browseDirectory(path?: string): Promise<DirectoryBrowseResult> {
   const params = new URLSearchParams();
   if (path) params.set('path', path);

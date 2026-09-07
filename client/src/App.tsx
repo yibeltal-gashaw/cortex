@@ -293,6 +293,21 @@ const AppContent: React.FC = () => {
     }
   };
 
+  const handleConversationsDeleted = (deletedIds: string[]) => {
+    const idSet = new Set(deletedIds);
+    setConversations(prev => prev.filter(c => !idSet.has(c.id)));
+    setTotalConversations(prev => Math.max(0, prev - deletedIds.length));
+    if (selectedId && idSet.has(selectedId)) {
+      setSelectedId(null);
+      setSession(null);
+      setArtifacts(null);
+      setDbInfo(null);
+      refreshData({ force: true });
+    } else {
+      loadAppStatus();
+    }
+  };
+
   const currentWorkspaceName = (() => {
     if (selectedWorkspace !== 'all') return selectedWorkspace;
     if (session?.environmentSnapshot?.activeDocument?.path) {
@@ -396,6 +411,7 @@ const AppContent: React.FC = () => {
                 selectConversation(conversations[0].id, 'timeline');
               }
             }}
+            onDeleteConversations={handleConversationsDeleted}
           />
 
           {/* Column 3: Central Execution Feed & Top Header */}
@@ -512,7 +528,10 @@ const AppContent: React.FC = () => {
           conversationId={selectedId}
           isOpen={isDeleteModalOpen}
           onClose={() => setIsDeleteModalOpen(false)}
-          onDeleted={handleConversationDeleted}
+          onDeleted={(ids) => {
+            const deletedId = Array.isArray(ids) ? ids[0] : ids;
+            if (deletedId) handleConversationDeleted(deletedId);
+          }}
         />
       )}
 

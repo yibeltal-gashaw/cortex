@@ -64,3 +64,33 @@ export function deleteConversation(conversationId: string): DeletionResult {
     deletedItems
   };
 }
+
+export interface BatchDeletionResult {
+  success: boolean;
+  totalDeleted: number;
+  failedIds: string[];
+  deletedItems: string[];
+}
+
+export function deleteConversations(conversationIds: string[]): BatchDeletionResult {
+  let totalDeleted = 0;
+  const failedIds: string[] = [];
+  const allDeletedItems: string[] = [];
+
+  for (const id of conversationIds) {
+    const result = deleteConversation(id);
+    if (result.success) {
+      totalDeleted++;
+      allDeletedItems.push(...result.deletedItems);
+    } else {
+      failedIds.push(id);
+    }
+  }
+
+  return {
+    success: failedIds.length === 0,
+    totalDeleted,
+    failedIds,
+    deletedItems: allDeletedItems
+  };
+}

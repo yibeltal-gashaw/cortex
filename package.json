@@ -17,9 +17,11 @@
     "package:linux": "npm run build:all && electron-builder --linux",
     "install:all": "npm install && npm install --prefix server && npm install --prefix client"
   },
+  "author": "Yibeltal Gashaw",
   "build": {
     "appId": "com.cortex.antigravitytracker",
     "productName": "Cortex",
+    "copyright": "Copyright © 2026 Yibeltal Gashaw",
     "directories": {
       "output": "dist-electron"
     },
@@ -35,14 +37,16 @@
         { "target": "nsis", "arch": ["x64"] },
         { "target": "portable", "arch": ["x64"] }
       ],
-      "icon": "client/public/favicon.png"
+      "icon": "client/public/favicon.png",
+      "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Cortex Tracker"
+      "shortcutName": "Cortex"
     }
   },
   "devDependencies": {

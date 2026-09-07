@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  Maximize2,
   ChevronDown,
   Trash2,
   PanelRightClose,
@@ -56,17 +55,6 @@ export const HudHeader: React.FC<HudHeaderProps> = ({
   lastRefreshed = null
 }) => {
   const { interceptSkillExecution } = useAgentPermissions();
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen().catch(() => {});
-      setIsFullscreen(false);
-    }
-  };
 
   const handleForgetClick = async () => {
     if (!session) return;

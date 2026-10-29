@@ -3,7 +3,8 @@ import {
   Activity,
   Settings,
   Sun,
-  Moon
+  Moon,
+  Command
 } from 'lucide-react';
 import { AppStatus } from '../types/index.js';
 
@@ -15,6 +16,7 @@ interface NavRailProps {
   onOpenSettings: () => void;
   isSettingsOpen?: boolean;
   status: AppStatus | null;
+  onOpenCommandPalette?: () => void;
 }
 
 export const NavRail: React.FC<NavRailProps> = ({
@@ -24,7 +26,8 @@ export const NavRail: React.FC<NavRailProps> = ({
   onToggleTheme,
   onOpenSettings,
   isSettingsOpen = false,
-  status
+  status,
+  onOpenCommandPalette
 }) => {
   return (
     <nav className="hud-nav-rail" aria-label="Main Navigation">
@@ -64,6 +67,18 @@ export const NavRail: React.FC<NavRailProps> = ({
           <Activity size={20} />
           <span className="rail-tooltip">Activity Stream</span>
         </button>
+
+        {onOpenCommandPalette && (
+          <button
+            className="rail-item"
+            onClick={onOpenCommandPalette}
+            title="Command Palette & Quick Open (Ctrl+K)"
+          >
+            <Command size={19} />
+            <span className="rail-tooltip">Command Palette (Ctrl+K)</span>
+          </button>
+        )}
+
         <div className="rail-divider" />
       </div>
 

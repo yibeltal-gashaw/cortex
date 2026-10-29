@@ -8,9 +8,12 @@ import { ArtifactsTab } from './components/ArtifactsTab.js';
 import { DatabaseTab } from './components/DatabaseTab.js';
 import { DeleteModal } from './components/DeleteModal.js';
 import { SettingsPage } from './components/SettingsPage.js';
+import { SessionComparisonModal } from './components/SessionComparisonModal.js';
+import { CommandPaletteModal } from './components/CommandPaletteModal.js';
 import { PermissionsProvider } from './context/PermissionsContext.js';
 import { JitConsentModal } from './components/JitConsentModal.js';
 import { useAgentPermissions } from './hooks/useAgentPermissions.js';
+import { useDesktopNotifications } from './hooks/useDesktopNotifications.js';
 import {
   AppStatus,
   ConversationSummary,
@@ -23,7 +26,8 @@ import {
   fetchConversations,
   fetchConversation,
   fetchArtifacts,
-  fetchDatabaseInfo
+  fetchDatabaseInfo,
+  createConversationStream
 } from './api/index.js';
 import { Loader2, MessageSquare } from 'lucide-react';
 
@@ -63,7 +67,16 @@ const AppContent: React.FC = () => {
     return [3, 5, 10, 30].includes(parsed) ? parsed : 5;
   });
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(new Date());
+  const [isLiveStreaming, setIsLiveStreaming] = useState<boolean>(false);
   const isRefreshingRef = useRef<boolean>(false);
+  const {
+    permission: notificationPermission,
+    enabled: notificationsEnabled,
+    soundEnabled,
+    toggleEnabled: toggleNotifications,
+    toggleSound,
+    testChime
+  } = useDesktopNotifications(session);
 
   const [isTelemetryOpen, setIsTelemetryOpen] = useState<boolean>(() => {
     return typeof window !== 'undefined' ? window.innerWidth > 1024 : true;
@@ -114,6 +127,20 @@ const AppContent: React.FC = () => {
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isComparisonOpen, setIsComparisonOpen] = useState<boolean>(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+
+  // Global keyboard shortcut Ctrl+K / Cmd+K for Command Palette
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Apply theme to document root and sync with Electron titlebar overlay
   useEffect(() => {
@@ -235,6 +262,35 @@ const AppContent: React.FC = () => {
     };
   }, [selectedId, selectedWorkspace, searchQuery, activeSubTab]);
 
+  // Real-Time SSE Delta Stream for Active Conversation
+  useEffect(() => {
+    if (!selectedId) {
+      setIsLiveStreaming(false);
+      return;
+    }
+
+    const closeStream = createConversationStream(selectedId, {
+      onStatusChange: (connected) => {
+        setIsLiveStreaming(connected);
+      },
+      onInitial: (initialSession) => {
+        setSession(initialSession);
+        setLastRefreshed(new Date());
+      },
+      onUpdate: (updatedSession) => {
+        setSession(updatedSession);
+        setLastRefreshed(new Date());
+      },
+      onError: () => {
+        setIsLiveStreaming(false);
+      }
+    });
+
+    return () => {
+      closeStream();
+    };
+  }, [selectedId]);
+
   // Keyboard shortcut R or Ctrl+R / Cmd+R to refresh
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -354,6 +410,7 @@ const AppContent: React.FC = () => {
         }}
         isSettingsOpen={isSettingsOpen}
         status={status}
+        onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
       />
 
       {/* 2. Main Multi-Pane Content */}
@@ -439,6 +496,12 @@ const AppContent: React.FC = () => {
                     ? session.steps[0].userPrompt.requestText.slice(0, 48)
                     : session?.id || null
                 }
+                notificationsEnabled={notificationsEnabled}
+                notificationPermission={notificationPermission}
+                soundEnabled={soundEnabled}
+                onToggleNotifications={toggleNotifications}
+                onToggleSound={toggleSound}
+                onTestNotification={testChime}
               />
             ) : (
               <>
@@ -454,6 +517,12 @@ const AppContent: React.FC = () => {
                   onRefreshSession={() => refreshData({ force: true })}
                   autoRefreshEnabled={autoRefreshEnabled}
                   lastRefreshed={lastRefreshed}
+                  isLiveStreaming={isLiveStreaming}
+                  onSelectConversation={(id) => selectConversation(id)}
+                  onOpenComparison={() => setIsComparisonOpen(true)}
+                  activeSubTab={activeSubTab}
+                  onSelectSubTab={(tab) => setActiveSubTab(tab)}
+                  artifactsCount={artifacts ? ((artifacts.scratchFiles?.length || 0) + (artifacts.uploadedMedia?.length || 0) + (artifacts.hasPlan ? 1 : 0) + (artifacts.hasWalkthrough ? 1 : 0)) : 0}
                 />
 
                 <div className="hud-center-content-scroll">
@@ -523,6 +592,27 @@ const AppContent: React.FC = () => {
         </div>
 
       {/* Modals & Dialogs */}
+      <CommandPaletteModal
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        conversations={conversations}
+        onSelectConversation={(id, subTab) => selectConversation(id, subTab)}
+        onToggleTheme={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))}
+        onToggleSidebar={toggleSidebar}
+        onToggleTelemetry={() => setIsTelemetryOpen(prev => !prev)}
+        onRefresh={() => refreshData({ force: true })}
+        onOpenComparison={() => setIsComparisonOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        currentSessionId={selectedId}
+      />
+
+      <SessionComparisonModal
+        isOpen={isComparisonOpen}
+        onClose={() => setIsComparisonOpen(false)}
+        conversations={conversations}
+        currentSessionId={selectedId}
+      />
+
       {selectedId && (
         <DeleteModal
           conversationId={selectedId}

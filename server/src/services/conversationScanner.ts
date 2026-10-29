@@ -14,6 +14,10 @@ export interface ConversationSummary {
   updatedAt: string;
   stepCount: number;
   fileSizeBytes: number;
+  parentId?: string;
+  isSubagent?: boolean;
+  subagentRole?: string;
+  subagentCount?: number;
   artifacts: {
     hasPlan: boolean;
     hasWalkthrough: boolean;
@@ -163,6 +167,10 @@ export function scanSingleConversation(conversationId: string, dataDir: string):
   let createdAt = new Date(mtimeMs).toISOString();
   let updatedAt = new Date(mtimeMs).toISOString();
   let stepCount = 0;
+  let parentId: string | undefined;
+  let isSubagent = false;
+  let subagentRole: string | undefined;
+  let subagentCount = 0;
 
   if (fs.existsSync(logPath)) {
     try {
@@ -188,6 +196,19 @@ export function scanSingleConversation(conversationId: string, dataDir: string):
             if (!model) {
               model = extractModelFromText(firstStep.content);
             }
+
+            const parentMatch = firstStep.content.match(/Parent conversation ID:\s*([0-9a-fA-F-]+)/i) ||
+                                firstStep.content.match(/parent_session_id["']?\s*:\s*["']?([0-9a-fA-F-]+)/i) ||
+                                firstStep.content.match(/parent_conversation_id["']?\s*:\s*["']?([0-9a-fA-F-]+)/i);
+            if (parentMatch) {
+              parentId = parentMatch[1];
+              isSubagent = true;
+            }
+
+            const roleMatch = firstStep.content.match(/Role:\s*([^\r\n,]+)/i);
+            if (roleMatch) {
+              subagentRole = roleMatch[1].trim();
+            }
           }
         } catch {
           // fallback
@@ -198,6 +219,10 @@ export function scanSingleConversation(conversationId: string, dataDir: string):
       const fileContent = fs.readFileSync(logPath, 'utf8');
       const lines = fileContent.split('\n').filter(Boolean);
       stepCount = lines.length;
+
+      if (fileContent.includes('"invoke_subagent"')) {
+        subagentCount = (fileContent.match(/"name"\s*:\s*"invoke_subagent"/g) || []).length;
+      }
 
       // Get last line timestamp
       if (lines.length > 1) {
@@ -225,7 +250,7 @@ export function scanSingleConversation(conversationId: string, dataDir: string):
   const taskCount = fs.existsSync(tasksDir) ? fs.readdirSync(tasksDir).filter(f => f.endsWith('.log')).length : 0;
 
   const dbPath = path.join(dataDir, 'conversations', `${conversationId}.db`);
-  const hasDb = fs.existsSync(dbPath);
+  const hasDb = fs.existsSync(dbPath) || fs.existsSync(path.join(dataDir, 'conversation_summaries.db'));
 
   const summary: ConversationSummary = {
     id: conversationId,
@@ -238,6 +263,10 @@ export function scanSingleConversation(conversationId: string, dataDir: string):
     updatedAt,
     stepCount,
     fileSizeBytes,
+    parentId,
+    isSubagent,
+    subagentRole,
+    subagentCount,
     artifacts: {
       hasPlan,
       hasWalkthrough,

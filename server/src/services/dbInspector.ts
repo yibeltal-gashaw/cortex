@@ -201,7 +201,7 @@ function formatValue(val: any, colName?: string, row?: Record<string, any>, tabl
 
     // 5. Generate human-readable summary
     let summary = '';
-    const knownTools = ['view_file', 'replace_file_content', 'run_command', 'write_to_file', 'multi_replace_file_content', 'search_web', 'list_dir', 'grep_search', 'read_url_content', 'ask_question', 'generate_image', 'schedule', 'manage_task'];
+    const knownTools = ['view_file', 'read_file', 'replace_file_content', 'edit_file', 'run_command', 'write_to_file', 'write_file', 'multi_replace_file_content', 'search_web', 'list_dir', 'grep_search', 'read_url_content', 'ask_question', 'generate_image', 'schedule', 'manage_task'];
     const toolName = strings.find(str => knownTools.includes(str));
     const filePath = strings.find(str => (str.includes(':\\') || str.includes('file://') || str.match(/\.(tsx?|jsx?|md|json|html|css|py|rs|go)\b/)) && !str.includes('sessionID'));
     const modelName = strings.find(str => str.includes('Gemini') || str.includes('Claude') || str.includes('gemini-') || str.includes('claude-'));
@@ -270,8 +270,9 @@ function formatValue(val: any, colName?: string, row?: Record<string, any>, tabl
           summary = embeddedJson.toolAction;
         } else if (embeddedJson.toolSummary) {
           summary = embeddedJson.toolSummary;
-        } else if (embeddedJson.AbsolutePath) {
-          const base = embeddedJson.AbsolutePath.replace(/\\/g, '/').split('/').pop();
+        } else if (embeddedJson.AbsolutePath || embeddedJson.Path) {
+          const rawP = embeddedJson.Path || embeddedJson.AbsolutePath;
+          const base = String(rawP).replace(/\\/g, '/').split('/').pop();
           summary = `${toolName || 'File'}: ${base}`;
         } else if (embeddedJson.TargetFile) {
           const base = embeddedJson.TargetFile.replace(/\\/g, '/').split('/').pop();
@@ -333,21 +334,55 @@ function formatValue(val: any, colName?: string, row?: Record<string, any>, tabl
   return val;
 }
 
-export function inspectDatabase(conversationId: string): {
+function safeExists(filePath: string): boolean {
+  try {
+    return fs.existsSync(filePath);
+  } catch {
+    return false;
+  }
+}
+
+export function resolveDbPath(conversationId: string, requestedGlobal = false): { dbPath: string; isGlobal: boolean; exists: boolean } {
+  const dataDir = getDataDir();
+  const sessionDb = path.join(dataDir, 'conversations', `${conversationId}.db`);
+  const globalDb = path.join(dataDir, 'conversation_summaries.db');
+
+  if (requestedGlobal && safeExists(globalDb)) {
+    return { dbPath: globalDb, isGlobal: true, exists: true };
+  }
+
+  if (safeExists(sessionDb)) {
+    return { dbPath: sessionDb, isGlobal: false, exists: true };
+  }
+
+  if (safeExists(globalDb)) {
+    return { dbPath: globalDb, isGlobal: true, exists: true };
+  }
+
+  return { dbPath: sessionDb, isGlobal: false, exists: false };
+}
+
+export function inspectDatabase(conversationId: string, requestedGlobal = false): {
   exists: boolean;
   tables: TableSummary[];
   dbPath: string;
+  isGlobal: boolean;
+  hasBoth: boolean;
 } {
   const dataDir = getDataDir();
-  const dbPath = path.join(dataDir, 'conversations', `${conversationId}.db`);
+  const sessionDb = path.join(dataDir, 'conversations', `${conversationId}.db`);
+  const globalDb = path.join(dataDir, 'conversation_summaries.db');
+  const hasSession = safeExists(sessionDb);
+  const hasGlobal = safeExists(globalDb);
 
-  if (!fs.existsSync(dbPath)) {
-    return { exists: false, tables: [], dbPath };
+  const resolved = resolveDbPath(conversationId, requestedGlobal);
+  if (!resolved.exists) {
+    return { exists: false, tables: [], dbPath: resolved.dbPath, isGlobal: false, hasBoth: false };
   }
 
   let db: DatabaseSync | null = null;
   try {
-    db = new DatabaseSync(dbPath, { readOnly: true });
+    db = new DatabaseSync(resolved.dbPath, { readOnly: true });
     const tableRows = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all() as Array<{ name: string }>;
 
     const tables: TableSummary[] = [];
@@ -366,14 +401,97 @@ export function inspectDatabase(conversationId: string): {
     return {
       exists: true,
       tables,
-      dbPath
+      dbPath: resolved.dbPath,
+      isGlobal: resolved.isGlobal,
+      hasBoth: hasSession && hasGlobal
     };
   } catch (err: any) {
-    console.error(`Failed to inspect database for ${conversationId}:`, err);
+    console.error(`Failed to inspect database at ${resolved.dbPath}:`, err);
     return {
       exists: true,
       tables: [],
-      dbPath
+      dbPath: resolved.dbPath,
+      isGlobal: resolved.isGlobal,
+      hasBoth: hasSession && hasGlobal
+    };
+  } finally {
+    if (db) {
+      try {
+        db.close();
+      } catch {}
+    }
+  }
+}
+
+export function executeCustomQuery(
+  conversationId: string,
+  sql: string,
+  requestedGlobal = false
+): {
+  success: boolean;
+  columns: string[];
+  rows: any[];
+  rowCount: number;
+  durationMs: number;
+  error?: string;
+} {
+  const resolved = resolveDbPath(conversationId, requestedGlobal);
+  if (!resolved.exists) {
+    return {
+      success: false,
+      columns: [],
+      rows: [],
+      rowCount: 0,
+      durationMs: 0,
+      error: `Database file does not exist at ${resolved.dbPath}`
+    };
+  }
+
+  const cleanSql = (sql || '').trim();
+  if (!/^(SELECT|PRAGMA|EXPLAIN|WITH)\b/i.test(cleanSql)) {
+    return {
+      success: false,
+      columns: [],
+      rows: [],
+      rowCount: 0,
+      durationMs: 0,
+      error: 'Security guard: Only read-only queries (SELECT, PRAGMA, EXPLAIN, WITH) are permitted.'
+    };
+  }
+
+  let db: DatabaseSync | null = null;
+  const start = performance.now();
+  try {
+    db = new DatabaseSync(resolved.dbPath, { readOnly: true });
+    const stmt = db.prepare(cleanSql);
+    const rawRows = stmt.all() as any[];
+    const durationMs = Math.round((performance.now() - start) * 100) / 100;
+
+    const columns = rawRows.length > 0 ? Object.keys(rawRows[0]) : [];
+    const formattedRows = rawRows.map(row => {
+      const res: Record<string, any> = {};
+      for (const col of Object.keys(row)) {
+        res[col] = formatValue(row[col], col, row, 'custom_query');
+      }
+      return res;
+    });
+
+    return {
+      success: true,
+      columns,
+      rows: formattedRows,
+      rowCount: formattedRows.length,
+      durationMs
+    };
+  } catch (err: any) {
+    const durationMs = Math.round((performance.now() - start) * 100) / 100;
+    return {
+      success: false,
+      columns: [],
+      rows: [],
+      rowCount: 0,
+      durationMs,
+      error: err.message || 'Error executing SQL query'
     };
   } finally {
     if (db) {
@@ -387,22 +505,21 @@ export function inspectDatabase(conversationId: string): {
 export function queryTableRows(
   conversationId: string,
   tableName: string,
-  options?: { limit?: number; offset?: number; search?: string }
+  options?: { limit?: number; offset?: number; search?: string; isGlobal?: boolean }
 ): {
   rows: any[];
   total: number;
   columns: ColumnInfo[];
 } {
-  const dataDir = getDataDir();
-  const dbPath = path.join(dataDir, 'conversations', `${conversationId}.db`);
+  const resolved = resolveDbPath(conversationId, options?.isGlobal);
 
-  if (!fs.existsSync(dbPath)) {
+  if (!resolved.exists) {
     return { rows: [], total: 0, columns: [] };
   }
 
   let db: DatabaseSync | null = null;
   try {
-    db = new DatabaseSync(dbPath, { readOnly: true });
+    db = new DatabaseSync(resolved.dbPath, { readOnly: true });
     // Sanitize table name to prevent injection
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>;
     const validTable = tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());

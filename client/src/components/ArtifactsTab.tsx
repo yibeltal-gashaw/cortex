@@ -23,6 +23,8 @@ import { marked } from 'marked';
 import { ArtifactOverview, FileTreeNode } from '../types/index.js';
 import { fetchArtifactFile } from '../api/index.js';
 import { JsonViewerPanel } from './JsonViewerPanel.js';
+import { TaskTerminalViewer } from './TaskTerminalViewer.js';
+import { GenerativeUiViewer } from './GenerativeUiViewer.js';
 
 interface ArtifactsTabProps {
   conversationId: string;
@@ -473,6 +475,17 @@ export const ArtifactsTab: React.FC<ArtifactsTabProps> = ({
               <video controls autoPlay loop src={mediaMeta.rawUrl} />
             </div>
           </div>
+        ) : (selectedPath.toLowerCase().endsWith('.html') || selectedPath.toLowerCase().endsWith('.htm')) ? (
+          <GenerativeUiViewer
+            htmlContent={fileContent}
+            fileName={selectedPath}
+          />
+        ) : (selectedPath.includes('.system_generated/tasks/') || (selectedPath.startsWith('task-') && selectedPath.endsWith('.log')) || selectedPath.endsWith('.log')) ? (
+          <TaskTerminalViewer
+            conversationId={conversationId}
+            taskPath={selectedPath}
+            initialContent={fileContent}
+          />
         ) : isMarkdown ? (
           <div
             className="markdown-body"
@@ -530,6 +543,27 @@ export const ArtifactsTab: React.FC<ArtifactsTabProps> = ({
                     Uploaded Assets ({artifacts.uploadedMedia.length})
                   </span>
                 </button>
+              )}
+
+              {artifacts.taskLogs.length > 0 && (
+                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                    Background Processes ({artifacts.taskLogs.length})
+                  </span>
+                  {artifacts.taskLogs.map(tl => (
+                    <button
+                      key={tl.name}
+                      className={`tree-node-item ${selectedPath === tl.relativePath ? 'selected' : ''}`}
+                      onClick={() => loadFile(tl.relativePath)}
+                      style={{ padding: '4px 6px' }}
+                    >
+                      <Terminal size={13} color="var(--cortex-synapse-purple)" />
+                      <span className="mono truncate" style={{ color: 'var(--cortex-deep-thought)', fontSize: '11px' }}>
+                        {tl.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           </div>

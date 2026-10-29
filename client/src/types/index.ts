@@ -7,6 +7,16 @@ export interface CredentialMatch {
   severity: 'high' | 'medium' | 'info';
 }
 
+export interface SubagentNode {
+  id?: string;
+  conversationId?: string;
+  typeName: string;
+  role: string;
+  prompt: string;
+  stepIndex: number;
+  status?: string;
+}
+
 export interface ConversationSummary {
   id: string;
   title: string;
@@ -18,6 +28,10 @@ export interface ConversationSummary {
   updatedAt: string;
   stepCount: number;
   fileSizeBytes: number;
+  parentId?: string;
+  isSubagent?: boolean;
+  subagentRole?: string;
+  subagentCount?: number;
   artifacts: {
     hasPlan: boolean;
     hasWalkthrough: boolean;
@@ -69,6 +83,22 @@ export interface ToolCallItem {
   };
 }
 
+export interface TokenMetrics {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  totalTokens: number;
+}
+
+export interface SessionTokenStats {
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheReadTokens: number;
+  totalTokens: number;
+  cacheHitRatePercent: number;
+  estimatedCostUsd: number;
+}
+
 export interface TimelineStep {
   stepIndex: number;
   type: string;
@@ -84,6 +114,8 @@ export interface TimelineStep {
   thinking?: string;
   toolCalls?: ToolCallItem[];
   assistantResponse?: string;
+  tokenMetrics?: TokenMetrics;
+  subagent?: SubagentNode;
   rawPayload?: any;
 }
 
@@ -96,7 +128,10 @@ export interface ParsedConversationSession {
   model: string;
   environmentSnapshot?: EnvironmentSnapshot;
   toolStats: Record<string, number>;
+  tokenStats?: SessionTokenStats;
   totalSteps: number;
+  parentSessionId?: string;
+  subagents?: SubagentNode[];
   steps: TimelineStep[];
 }
 
@@ -147,10 +182,21 @@ export interface FormattedBlob {
   extractedStrings?: string[];
 }
 
+export interface SqlQueryResult {
+  success: boolean;
+  columns: string[];
+  rows: any[];
+  rowCount: number;
+  durationMs: number;
+  error?: string;
+}
+
 export interface DatabaseInfo {
   exists: boolean;
   tables: TableSummary[];
   dbPath: string;
+  isGlobal?: boolean;
+  hasBoth?: boolean;
 }
 
 export interface AppStatus {

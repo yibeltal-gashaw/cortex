@@ -7,8 +7,10 @@ import { getDataDir, setDataDir, getDefaultDataDir } from '../config.js';
 import { scanAllConversations, invalidateCache } from '../services/conversationScanner.js';
 import { parseConversationTimeline } from '../services/timelineParser.js';
 import { getArtifactsOverview, readArtifactFile, getMediaFilePath, getArtifactFilePath } from '../services/artifactService.js';
-import { inspectDatabase, queryTableRows } from '../services/dbInspector.js';
+import { inspectDatabase, queryTableRows, executeCustomQuery } from '../services/dbInspector.js';
 import { deleteConversation, deleteConversations } from '../services/deletionService.js';
+import { generateMarkdownRunbook, generateHtmlRunbook } from '../services/runbookExporter.js';
+import { listTasks, streamTaskLog } from '../services/taskService.js';
 
 export const apiRouter = Router();
 
@@ -97,6 +99,135 @@ apiRouter.get('/conversations/:id', (req, res) => {
   }
 });
 
+// Live Streaming SSE: Tailing Delta Updates for Conversation Timeline
+apiRouter.get('/conversations/:id/stream', (req, res) => {
+  const { id } = req.params;
+  const dataDir = getDataDir();
+  const logPath = path.join(dataDir, 'brain', id, '.system_generated', 'logs', 'transcript.jsonl');
+
+  // Set SSE Headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  let isAlive = true;
+  let lastMtime = 0;
+  let lastSize = 0;
+  let lastStepCount = 0;
+
+  // Send initial session data
+  try {
+    const initialSession = parseConversationTimeline(id);
+    if (initialSession) {
+      lastStepCount = initialSession.steps.length;
+      res.write(`event: initial\ndata: ${JSON.stringify(initialSession)}\n\n`);
+    }
+    if (fs.existsSync(logPath)) {
+      const stat = fs.statSync(logPath);
+      lastMtime = stat.mtimeMs;
+      lastSize = stat.size;
+    }
+  } catch (err: any) {
+    res.write(`event: error\ndata: ${JSON.stringify({ error: err.message })}\n\n`);
+  }
+
+  // Periodic heartbeat every 15s to keep connection alive
+  const heartbeatTimer = setInterval(() => {
+    if (!isAlive) return;
+    try {
+      res.write(`event: ping\ndata: {}\n\n`);
+    } catch {
+      cleanup();
+    }
+  }, 15000);
+
+  // Poll logPath every 800ms for incremental modifications
+  const pollTimer = setInterval(() => {
+    if (!isAlive) return;
+    try {
+      if (!fs.existsSync(logPath)) return;
+      const stat = fs.statSync(logPath);
+      if (stat.mtimeMs > lastMtime || stat.size !== lastSize) {
+        lastMtime = stat.mtimeMs;
+        lastSize = stat.size;
+
+        const updatedSession = parseConversationTimeline(id);
+        if (updatedSession) {
+          const stepDiff = updatedSession.steps.length - lastStepCount;
+          lastStepCount = updatedSession.steps.length;
+          res.write(`event: update\ndata: ${JSON.stringify({ session: updatedSession, stepDiff })}\n\n`);
+        }
+      }
+    } catch {
+      // Ignore transient file lock reading issues
+    }
+  }, 800);
+
+  const cleanup = () => {
+    if (!isAlive) return;
+    isAlive = false;
+    clearInterval(heartbeatTimer);
+    clearInterval(pollTimer);
+  };
+
+  req.on('close', cleanup);
+  req.on('end', cleanup);
+});
+
+// Runbook Export: Markdown (.md) with credential redaction
+apiRouter.get('/conversations/:id/export/markdown', (req, res) => {
+  const { id } = req.params;
+  try {
+    const session = parseConversationTimeline(id);
+    if (!session) {
+      res.status(404).send('Session not found');
+      return;
+    }
+    const md = generateMarkdownRunbook(session);
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="cortex-runbook-${id.slice(0, 8)}.md"`);
+    res.send(md);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Runbook Export: Standalone Self-Contained HTML (.html)
+apiRouter.get('/conversations/:id/export/html', (req, res) => {
+  const { id } = req.params;
+  try {
+    const session = parseConversationTimeline(id);
+    if (!session) {
+      res.status(404).send('Session not found');
+      return;
+    }
+    const html = generateHtmlRunbook(session);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="cortex-runbook-${id.slice(0, 8)}.html"`);
+    res.send(html);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Background Tasks: List Tasks for Conversation
+apiRouter.get('/conversations/:id/tasks', (req, res) => {
+  const { id } = req.params;
+  try {
+    const tasks = listTasks(id);
+    res.json({ tasks });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Background Tasks: Stream Real-Time Task Output (SSE)
+apiRouter.get('/conversations/:id/tasks/:taskId/stream', (req, res) => {
+  const { id, taskId } = req.params;
+  streamTaskLog(req, res, id, taskId);
+});
+
 // Artifacts Overview
 apiRouter.get('/conversations/:id/artifacts', (req, res) => {
   const { id } = req.params;
@@ -172,9 +303,10 @@ apiRouter.get('/conversations/:id/media/:filename', (req, res) => {
 
 // SQLite DB Inspector: Tables & Schema
 apiRouter.get('/conversations/:id/db', (req, res) => {
+  const isGlobal = req.query.global === 'true' || req.query.global === '1';
   const { id } = req.params;
   try {
-    const dbInfo = inspectDatabase(id);
+    const dbInfo = inspectDatabase(id, isGlobal);
     res.json(dbInfo);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -189,10 +321,27 @@ apiRouter.get('/conversations/:id/db/table/:tableName', (req, res) => {
   const search = req.query.search as string | undefined;
 
   try {
-    const data = queryTableRows(id, tableName, { limit, offset, search });
+    const isGlobal = req.query.global === 'true' || req.query.global === '1';
+    const data = queryTableRows(id, tableName, { limit, offset, search, isGlobal });
     res.json(data);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// SQLite DB Inspector: Execute Ad-Hoc SQL Query
+apiRouter.post('/conversations/:id/db/query', (req, res) => {
+  const { id } = req.params;
+  const { sql, isGlobal } = req.body;
+  if (!sql || typeof sql !== 'string') {
+    res.status(400).json({ success: false, error: 'Missing sql query in request body' });
+    return;
+  }
+  try {
+    const result = executeCustomQuery(id, sql, isGlobal === true);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

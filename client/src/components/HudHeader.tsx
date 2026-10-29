@@ -6,10 +6,20 @@ import {
   PanelRightOpen,
   PanelLeftClose,
   PanelLeftOpen,
-  RotateCw
+  RotateCw,
+  Network,
+  ArrowUpLeft,
+  Download,
+  FileText,
+  Globe,
+  GitCompare,
+  Activity,
+  FolderKanban,
+  Database
 } from 'lucide-react';
 import { ParsedConversationSession } from '../types/index.js';
 import { useAgentPermissions } from '../hooks/useAgentPermissions.js';
+import { SubagentDagModal } from './SubagentDagModal.js';
 
 interface HudHeaderProps {
   session: ParsedConversationSession | null;
@@ -23,6 +33,12 @@ interface HudHeaderProps {
   onRefreshSession?: () => void;
   autoRefreshEnabled?: boolean;
   lastRefreshed?: Date | null;
+  isLiveStreaming?: boolean;
+  onSelectConversation?: (id: string) => void;
+  onOpenComparison?: () => void;
+  activeSubTab?: 'timeline' | 'artifacts' | 'db';
+  onSelectSubTab?: (tab: 'timeline' | 'artifacts' | 'db') => void;
+  artifactsCount?: number;
 }
 
 function formatRelativeTime(iso?: string): string {
@@ -52,9 +68,30 @@ export const HudHeader: React.FC<HudHeaderProps> = ({
   isRefreshing = false,
   onRefreshSession,
   autoRefreshEnabled = true,
-  lastRefreshed = null
+  lastRefreshed = null,
+  isLiveStreaming = false,
+  onSelectConversation,
+  onOpenComparison,
+  activeSubTab = 'timeline',
+  onSelectSubTab,
+  artifactsCount = 0
 }) => {
   const { interceptSkillExecution } = useAgentPermissions();
+  const [isDagModalOpen, setIsDagModalOpen] = React.useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = React.useState(false);
+  const exportMenuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setIsExportMenuOpen(false);
+      }
+    };
+    if (isExportMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isExportMenuOpen]);
 
   const handleForgetClick = async () => {
     if (!session) return;
@@ -100,11 +137,88 @@ export const HudHeader: React.FC<HudHeaderProps> = ({
               {session.model}
             </span>
           )}
+
+          {session?.parentSessionId && (
+            <button
+              className="metric-pill"
+              onClick={() => onSelectConversation?.(session.parentSessionId!)}
+              title={`Jump to parent orchestrator session (${session.parentSessionId})`}
+              style={{ fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '3px', marginLeft: '4px' }}
+            >
+              <ArrowUpLeft size={11} />
+              <span>Parent Agent</span>
+            </button>
+          )}
+
+          {session?.subagents && session.subagents.length > 0 && (
+            <button
+              className="metric-pill"
+              onClick={() => setIsDagModalOpen(true)}
+              title="Inspect Multi-Agent Orchestration DAG"
+              style={{
+                fontSize: '11px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                marginLeft: '4px',
+                background: 'rgba(139, 92, 246, 0.12)',
+                borderColor: 'rgba(139, 92, 246, 0.3)',
+                color: '#c084fc',
+                fontWeight: 600
+              }}
+            >
+              <Network size={12} />
+              <span>Agent DAG ({session.subagents.length})</span>
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Center: Primary View Switcher Tabs */}
+      {session && onSelectSubTab && (
+        <div className="hud-header-center-nav">
+          <button
+            className={`hud-header-tab ${activeSubTab === 'timeline' ? 'active' : ''}`}
+            onClick={() => onSelectSubTab('timeline')}
+            title="Timeline feed of execution events & tool invocations"
+          >
+            <Activity size={13} />
+            <span>Timeline</span>
+            <span className="hud-tab-counter mono">{session.steps.length}</span>
+          </button>
+
+          <button
+            className={`hud-header-tab ${activeSubTab === 'artifacts' ? 'active' : ''}`}
+            onClick={() => onSelectSubTab('artifacts')}
+            title="Session Artifacts, Sandboxed Web UI, and Background Tasks"
+          >
+            <FolderKanban size={13} />
+            <span>Artifacts</span>
+            {artifactsCount > 0 && (
+              <span className="hud-tab-counter mono">{artifactsCount}</span>
+            )}
+          </button>
+
+          <button
+            className={`hud-header-tab ${activeSubTab === 'db' ? 'active' : ''}`}
+            onClick={() => onSelectSubTab('db')}
+            title="SQLite Database Tables & Ad-hoc SQL Query Console"
+          >
+            <Database size={13} />
+            <span>Database</span>
+          </button>
+        </div>
+      )}
+
       {/* Right: Actions, Fullscreen, Notifications, Profile Avatar & Sidebar Toggle */}
       <div className="hud-header-right">
+        {isLiveStreaming && (
+          <div className="hud-live-indicator" title="Connected to Real-Time SSE Stream (Delta updates enabled)">
+            <span className="live-ping-dot" />
+            <span className="live-text mono">LIVE</span>
+          </div>
+        )}
+
         {onRefreshSession && (
           <button
             className={`hud-action-icon-btn ${isRefreshing ? 'active' : ''}`}
@@ -113,6 +227,89 @@ export const HudHeader: React.FC<HudHeaderProps> = ({
             aria-label="Refresh active session"
           >
             <RotateCw size={15} className={isRefreshing ? 'spin-icon' : ''} />
+          </button>
+        )}
+
+        {session && (
+          <div ref={exportMenuRef} style={{ position: 'relative' }}>
+            <button
+              className={`hud-action-icon-btn ${isExportMenuOpen ? 'active' : ''}`}
+              title="Export Incident & Audit Runbook (Markdown / HTML)"
+              onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+            >
+              <Download size={15} />
+            </button>
+
+            {isExportMenuOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '6px',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--cortex-grey-matter-border)',
+                  borderRadius: '8px',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
+                  zIndex: 1000,
+                  width: '210px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: '4px',
+                  gap: '2px'
+                }}
+              >
+                <a
+                  href={`/api/conversations/${session.id}/export/markdown`}
+                  download={`cortex-runbook-${session.id.slice(0, 8)}.md`}
+                  onClick={() => setIsExportMenuOpen(false)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 12px',
+                    fontSize: '12px',
+                    color: 'var(--cortex-deep-thought)',
+                    textDecoration: 'none',
+                    borderRadius: '4px'
+                  }}
+                  className="db-table-btn"
+                >
+                  <FileText size={13} color="var(--cortex-synapse-purple)" />
+                  <span>Export Markdown (.md)</span>
+                </a>
+
+                <a
+                  href={`/api/conversations/${session.id}/export/html`}
+                  download={`cortex-runbook-${session.id.slice(0, 8)}.html`}
+                  onClick={() => setIsExportMenuOpen(false)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 12px',
+                    fontSize: '12px',
+                    color: 'var(--cortex-deep-thought)',
+                    textDecoration: 'none',
+                    borderRadius: '4px'
+                  }}
+                  className="db-table-btn"
+                >
+                  <Globe size={13} color="var(--cortex-cognitive-teal)" />
+                  <span>Export HTML (.html)</span>
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+
+        {onOpenComparison && (
+          <button
+            className="hud-action-icon-btn"
+            title="Compare Sessions (A/B Model Diff & Telemetry)"
+            onClick={onOpenComparison}
+          >
+            <GitCompare size={15} />
           </button>
         )}
 
@@ -135,6 +332,15 @@ export const HudHeader: React.FC<HudHeaderProps> = ({
         </button>
 
       </div>
+
+      {session && (
+        <SubagentDagModal
+          isOpen={isDagModalOpen}
+          onClose={() => setIsDagModalOpen(false)}
+          session={session}
+          onSelectConversation={onSelectConversation}
+        />
+      )}
     </header>
   );
 };

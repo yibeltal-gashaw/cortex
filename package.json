@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Antigravity Conversation Tracker & Inspector - Local developer tool for inspecting Antigravity IDE agent conversations",
   "private": true,
+  "bin": {
+    "cortex": "./bin/cortex.js"
+  },
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "concurrently -n \"SERVER,CLIENT\" -c \"blue,magenta\" \"npm run dev --prefix server\" \"npm run dev --prefix client\"",

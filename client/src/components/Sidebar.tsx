@@ -10,7 +10,9 @@ import {
   Database,
   ChevronDown,
   ChevronRight,
-  Trash2
+  Trash2,
+  GitFork,
+  Network
 } from 'lucide-react';
 import { ConversationSummary } from '../types/index.js';
 import { DeleteModal } from './DeleteModal.js';
@@ -254,7 +256,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             return (
               <div
                 key={c.id}
-                className={`hud-session-card ${isSelected ? 'selected' : ''} ${isChecked ? 'card-checked' : ''}`}
+                className={`hud-session-card ${isSelected ? 'selected' : ''} ${isChecked ? 'card-checked' : ''} ${c.isSubagent ? 'subagent-session-card' : ''}`}
+                style={c.isSubagent ? { paddingLeft: '14px', borderLeft: '3px solid var(--cortex-synapse-purple)' } : undefined}
               >
                 <div
                   className="card-main-area"
@@ -279,6 +282,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       />
                       <span className={`card-status-dot ${isSelected ? 'active' : ''}`} />
                       <span className="card-heading truncate" title={c.title}>
+                        {c.isSubagent && (
+                          <span className="subagent-tag mono" style={{ fontSize: '9px', background: 'rgba(139, 92, 246, 0.15)', color: '#c084fc', padding: '1px 5px', borderRadius: '3px', marginRight: '5px', display: 'inline-flex', alignItems: 'center' }}>
+                            <GitFork size={9} style={{ marginRight: '3px' }} />
+                            <span>{c.subagentRole || 'Subagent'}</span>
+                          </span>
+                        )}
                         {c.title || 'Untitled Session'}
                       </span>
                     </div>
@@ -291,6 +300,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <span className="card-step-count">
                       {c.stepCount} steps
                     </span>
+                    {c.subagentCount && c.subagentCount > 0 ? (
+                      <>
+                        <span className="card-dot-sep">·</span>
+                        <span className="mini-badge mono" style={{ fontSize: '9px', background: 'rgba(59, 130, 246, 0.12)', color: '#60a5fa', padding: '1px 4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                          <Network size={9} />
+                          {c.subagentCount} sub
+                        </span>
+                      </>
+                    ) : null}
                     <span className="card-dot-sep">·</span>
                     <span className="card-duration">
                       <Clock size={11} style={{ verticalAlign: '-1px', marginRight: '3px' }} />

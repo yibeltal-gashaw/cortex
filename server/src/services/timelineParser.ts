@@ -45,6 +45,16 @@ export interface ToolCallItem {
   };
 }
 
+export interface SubagentNode {
+  id?: string;
+  conversationId?: string;
+  typeName: string;
+  role: string;
+  prompt: string;
+  stepIndex: number;
+  status?: string;
+}
+
 export interface TimelineStep {
   stepIndex: number;
   type: string;
@@ -60,7 +70,25 @@ export interface TimelineStep {
   thinking?: string;
   toolCalls?: ToolCallItem[];
   assistantResponse?: string;
+  tokenMetrics?: TokenMetrics;
+  subagent?: SubagentNode;
   rawPayload?: any;
+}
+
+export interface TokenMetrics {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  totalTokens: number;
+}
+
+export interface SessionTokenStats {
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheReadTokens: number;
+  totalTokens: number;
+  cacheHitRatePercent: number;
+  estimatedCostUsd: number;
 }
 
 export interface ParsedConversationSession {
@@ -72,7 +100,10 @@ export interface ParsedConversationSession {
   model: string;
   environmentSnapshot?: EnvironmentSnapshot;
   toolStats: Record<string, number>;
+  tokenStats: SessionTokenStats;
   totalSteps: number;
+  parentSessionId?: string;
+  subagents?: SubagentNode[];
   steps: TimelineStep[];
 }
 
@@ -164,7 +195,9 @@ function formatDuration(ms: number): string {
 function cleanFilePath(filePath: string): string {
   if (!filePath) return '';
   let p = String(filePath).trim();
-  p = p.replace(/^["']+|["']+$/g, '');
+  while ((p.startsWith('"') && p.endsWith('"')) || (p.startsWith("'") && p.endsWith("'"))) {
+    p = p.slice(1, -1).trim();
+  }
   p = p.replace(/\\/g, '/');
   p = p.replace(/\/+/g, '/');
   return p;
@@ -184,6 +217,127 @@ function cleanContentString(content: string): string {
     .replace(/\\"/g, '"')
     .replace(/\\\\/g, '\\');
   return str.replace(/\r\n/g, '\n');
+}
+
+export function isEditTool(name: string): boolean {
+  return [
+    'replace_file_content',
+    'edit_file',
+    'write_to_file',
+    'write_file',
+    'multi_replace_file_content'
+  ].includes(name);
+}
+
+export function isViewTool(name: string): boolean {
+  return ['view_file', 'read_file'].includes(name);
+}
+
+export function isCommandTool(name: string): boolean {
+  return name === 'run_command';
+}
+
+export function isWebTool(name: string): boolean {
+  return ['read_url_content', 'search_web'].includes(name);
+}
+
+function parseCommandExitCode(rawStep: any): number {
+  if (typeof rawStep.exit_code === 'number') {
+    return rawStep.exit_code;
+  }
+  if (rawStep.content) {
+    const match = String(rawStep.content).match(/Command exited with code\s+(-?\d+)/i);
+    if (match) {
+      return parseInt(match[1], 10);
+    }
+  }
+  return rawStep.status === 'ERROR' ? 1 : 0;
+}
+
+function extractEditFileDiff(
+  toolName: string,
+  args: Record<string, any>,
+  resultContent?: string
+): { targetFile: string; oldContent: string; newContent: string; startLine?: number; endLine?: number } {
+  const isWrite = toolName === 'write_to_file' || toolName === 'write_file';
+  const targetFile = cleanFilePath(
+    args.Path || args.TargetFile || args.path || args.target_file || args.targetFile || ''
+  );
+
+  const oldContent = isWrite
+    ? ''
+    : (args.Target ?? args.TargetContent ?? args.target ?? args.target_content ?? args.targetContent ?? '');
+
+  const newContent = isWrite
+    ? (args.Content ?? args.CodeContent ?? args.content ?? args.code_content ?? args.codeContent ?? '')
+    : (args.Replacement ?? args.ReplacementContent ?? args.replacement ?? args.replacement_content ?? args.replacementContent ?? args.Content ?? args.CodeContent ?? '');
+
+  const startLine = args.StartLine ? parseInt(String(args.StartLine), 10) : (isWrite ? 1 : undefined);
+  const endLine = args.EndLine ? parseInt(String(args.EndLine), 10) : (isWrite ? 1 : undefined);
+
+  return {
+    targetFile,
+    oldContent: cleanContentString(oldContent),
+    newContent: cleanContentString(newContent),
+    startLine,
+    endLine
+  };
+}
+
+function extractViewedFileInfo(
+  args: Record<string, any>,
+  content: string
+): { path: string; startLine?: number; endLine?: number; content: string } {
+  const filePath = cleanFilePath(
+    args.Path || args.AbsolutePath || args.path || args.absolutePath || args.filePath || ''
+  );
+  const startLine = args.StartLine ? parseInt(String(args.StartLine), 10) : undefined;
+  const endLine = args.EndLine ? parseInt(String(args.EndLine), 10) : undefined;
+
+  return {
+    path: filePath,
+    startLine,
+    endLine,
+    content: cleanContentString(content)
+  };
+}
+
+function calculateEstimatedCost(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+  cacheReadTokens: number
+): number {
+  const m = (model || '').toLowerCase();
+  let inputRatePerM = 0.15;
+  let cacheRatePerM = 0.0375;
+  let outputRatePerM = 0.60;
+
+  if (m.includes('flash')) {
+    inputRatePerM = 0.075;
+    cacheRatePerM = 0.01875;
+    outputRatePerM = 0.30;
+  } else if (m.includes('argon') || m.includes('pro')) {
+    inputRatePerM = 1.25;
+    cacheRatePerM = 0.3125;
+    outputRatePerM = 5.00;
+  } else if (m.includes('opus')) {
+    inputRatePerM = 15.00;
+    cacheRatePerM = 1.50;
+    outputRatePerM = 75.00;
+  } else if (m.includes('sonnet') || m.includes('claude')) {
+    inputRatePerM = 3.00;
+    cacheRatePerM = 0.30;
+    outputRatePerM = 15.00;
+  }
+
+  const cost =
+    (inputTokens * inputRatePerM +
+      cacheReadTokens * cacheRatePerM +
+      outputTokens * outputRatePerM) /
+    1_000_000;
+
+  return Math.round(cost * 10000) / 10000;
 }
 
 export function parseConversationTimeline(conversationId: string): ParsedConversationSession | null {
@@ -208,9 +362,15 @@ export function parseConversationTimeline(conversationId: string): ParsedConvers
 
   let model = detectRealModel(conversationId, dataDir);
   let initialEnvironmentSnapshot: EnvironmentSnapshot | undefined;
+  let parentSessionId: string | undefined;
+  const subagents: SubagentNode[] = [];
   const toolStats: Record<string, number> = {};
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let totalCacheReadTokens = 0;
 
   const timelineSteps: TimelineStep[] = [];
+  const pairedStepIndices = new Set<number>();
 
   // Group and link steps
   for (let i = 0; i < rawSteps.length; i++) {
@@ -232,6 +392,15 @@ export function parseConversationTimeline(conversationId: string): ParsedConvers
 
       const credentialWarnings = scanForCredentials(content);
 
+      if (!parentSessionId) {
+        const parentMatch = content.match(/Parent conversation ID:\s*([0-9a-fA-F-]+)/i) ||
+                            content.match(/parent_session_id["']?\s*:\s*["']?([0-9a-fA-F-]+)/i) ||
+                            content.match(/parent_conversation_id["']?\s*:\s*["']?([0-9a-fA-F-]+)/i);
+        if (parentMatch) {
+          parentSessionId = parentMatch[1];
+        }
+      }
+
       timelineSteps.push({
         stepIndex: raw.step_index ?? i,
         type: 'USER_INPUT',
@@ -251,7 +420,8 @@ export function parseConversationTimeline(conversationId: string): ParsedConvers
       const toolCallsRaw = raw.tool_calls || [];
       const toolCalls: ToolCallItem[] = [];
 
-      for (const tc of toolCallsRaw) {
+      for (let tcIdx = 0; tcIdx < toolCallsRaw.length; tcIdx++) {
+        const tc = toolCallsRaw[tcIdx];
         const name = tc.name || tc.toolName || 'tool';
         toolStats[name] = (toolStats[name] || 0) + 1;
 
@@ -261,104 +431,133 @@ export function parseConversationTimeline(conversationId: string): ParsedConvers
         };
 
         // Attempt to find subsequent result step in next positions
-        for (let j = i + 1; j < Math.min(i + 5, rawSteps.length); j++) {
+        for (let j = i + 1; j < Math.min(i + 10, rawSteps.length); j++) {
+          if (pairedStepIndices.has(j)) {
+            continue;
+          }
+
           const nextRaw = rawSteps[j];
           if (nextRaw.type === 'PLANNER_RESPONSE' || nextRaw.type === 'USER_INPUT') {
             break;
           }
 
-          // Pair RUN_COMMAND
-          if (name === 'run_command' && nextRaw.type === 'RUN_COMMAND') {
+          // Pair RUN_COMMAND (handles RUN_COMMAND or GENERIC)
+          if (isCommandTool(name) && (nextRaw.type === 'RUN_COMMAND' || nextRaw.type === 'GENERIC')) {
+            const exitCode = parseCommandExitCode(nextRaw);
             toolItem.result = {
               type: 'RUN_COMMAND',
-              status: nextRaw.status,
-              exitCode: nextRaw.exit_code,
+              status: nextRaw.status || (exitCode === 0 ? 'DONE' : 'ERROR'),
+              exitCode,
               content: nextRaw.content
             };
+            pairedStepIndices.add(j);
             break;
           }
 
-          // Pair VIEW_FILE
-          if (name === 'view_file' && nextRaw.type === 'VIEW_FILE') {
+          // Pair VIEW_FILE / READ_FILE (handles VIEW_FILE or GENERIC)
+          if (isViewTool(name) && (nextRaw.type === 'VIEW_FILE' || nextRaw.type === 'GENERIC')) {
             toolItem.result = {
               type: 'VIEW_FILE',
-              status: nextRaw.status,
-              viewedFile: {
-                path: cleanFilePath(toolItem.args.AbsolutePath || ''),
-                startLine: toolItem.args.StartLine,
-                endLine: toolItem.args.EndLine,
-                content: cleanContentString(nextRaw.content || '')
-              }
+              status: nextRaw.status || 'DONE',
+              viewedFile: extractViewedFileInfo(toolItem.args, nextRaw.content || '')
             };
+            pairedStepIndices.add(j);
             break;
           }
 
-          // Pair CODE_ACTION (file edits)
-          if ((name === 'replace_file_content' || name === 'write_to_file' || name === 'multi_replace_file_content') && (nextRaw.type === 'CODE_ACTION' || nextRaw.type === 'REPLACE_FILE_CONTENT')) {
+          // Pair CODE_ACTION (file edits/writes, handles CODE_ACTION, REPLACE_FILE_CONTENT, or GENERIC)
+          if (isEditTool(name) && (nextRaw.type === 'CODE_ACTION' || nextRaw.type === 'REPLACE_FILE_CONTENT' || nextRaw.type === 'GENERIC')) {
             toolItem.result = {
-              type: nextRaw.type,
-              status: nextRaw.status,
+              type: 'CODE_ACTION',
+              status: nextRaw.status || 'DONE',
               content: nextRaw.content,
-              diff: {
-                targetFile: cleanFilePath(toolItem.args.TargetFile || ''),
-                oldContent: cleanContentString(toolItem.args.TargetContent || ''),
-                newContent: cleanContentString(toolItem.args.ReplacementContent || toolItem.args.CodeContent || ''),
-                startLine: toolItem.args.StartLine,
-                endLine: toolItem.args.EndLine
-              }
+              diff: extractEditFileDiff(name, toolItem.args, nextRaw.content)
             };
+            pairedStepIndices.add(j);
             break;
           }
 
-          // Pair READ_URL_CONTENT / SEARCH_WEB
-          if ((name === 'read_url_content' || name === 'search_web') && (nextRaw.type === 'READ_URL_CONTENT' || nextRaw.type === 'SEARCH_WEB')) {
+          // Pair READ_URL_CONTENT / SEARCH_WEB (handles SEARCH_WEB, READ_URL_CONTENT, or GENERIC)
+          if (isWebTool(name) && (nextRaw.type === 'READ_URL_CONTENT' || nextRaw.type === 'SEARCH_WEB' || nextRaw.type === 'GENERIC')) {
             toolItem.result = {
-              type: nextRaw.type,
-              status: nextRaw.status,
+              type: name === 'search_web' ? 'SEARCH_WEB' : 'READ_URL_CONTENT',
+              status: nextRaw.status || 'DONE',
               content: nextRaw.content
             };
+            pairedStepIndices.add(j);
             break;
           }
 
-          // Generic output step
+          // Generic output step for any other tool
           if (nextRaw.content && !toolItem.result) {
             toolItem.result = {
               type: nextRaw.type,
-              status: nextRaw.status,
+              status: nextRaw.status || 'DONE',
               content: cleanContentString(nextRaw.content)
             };
+            pairedStepIndices.add(j);
+            break;
           }
         }
 
-        // If replace_file_content didn't find next step, extract diff directly from args
-        if (name === 'replace_file_content' && !toolItem.result?.diff) {
+        // If edit or write didn't get diff from next step, extract diff directly from args
+        if (isEditTool(name) && !toolItem.result?.diff) {
           toolItem.result = {
             type: 'CODE_ACTION',
-            status: 'DONE',
-            diff: {
-              targetFile: cleanFilePath(toolItem.args.TargetFile || ''),
-              oldContent: cleanContentString(toolItem.args.TargetContent || ''),
-              newContent: cleanContentString(toolItem.args.ReplacementContent || ''),
-              startLine: toolItem.args.StartLine,
-              endLine: toolItem.args.EndLine
-            }
+            status: toolItem.result?.status || 'DONE',
+            diff: extractEditFileDiff(name, toolItem.args, toolItem.result?.content)
           };
-        } else if (name === 'write_to_file' && !toolItem.result?.diff) {
+        } else if (isViewTool(name) && !toolItem.result?.viewedFile) {
           toolItem.result = {
-            type: 'CODE_ACTION',
-            status: 'DONE',
-            diff: {
-              targetFile: cleanFilePath(toolItem.args.TargetFile || ''),
-              oldContent: '',
-              newContent: cleanContentString(toolItem.args.CodeContent || ''),
-              startLine: 1,
-              endLine: 1
-            }
+            type: 'VIEW_FILE',
+            status: toolItem.result?.status || 'DONE',
+            viewedFile: extractViewedFileInfo(toolItem.args, toolItem.result?.content || '')
           };
+        }
+
+        if (name === 'invoke_subagent') {
+          const typeName = toolItem.args.TypeName || toolItem.args.typeName || 'subagent';
+          const role = toolItem.args.Role || toolItem.args.role || 'Assistant';
+          const prompt = toolItem.args.Prompt || toolItem.args.prompt || '';
+          let subagentConvId: string | undefined;
+
+          if (toolItem.result?.content) {
+            const m = toolItem.result.content.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+            if (m) subagentConvId = m[1];
+          }
+
+          const subNode: SubagentNode = {
+            conversationId: subagentConvId,
+            typeName,
+            role,
+            prompt: prompt.slice(0, 300),
+            stepIndex: raw.step_index ?? i,
+            status: toolItem.result?.status || 'DONE'
+          };
+          subagents.push(subNode);
         }
 
         toolCalls.push(toolItem);
       }
+
+      const inTok = typeof raw.input_tokens === 'number' ? raw.input_tokens : (typeof raw.inputTokens === 'number' ? raw.inputTokens : 0);
+      const cacheTok = typeof raw.cache_read_tokens === 'number' ? raw.cache_read_tokens : (typeof raw.cacheReadTokens === 'number' ? raw.cacheReadTokens : 0);
+      const outTok = typeof raw.output_tokens === 'number' ? raw.output_tokens : (typeof raw.outputTokens === 'number' ? raw.outputTokens : Math.round(((thinking?.length || 0) + (raw.content?.length || 0)) / 3.8));
+
+      let stepTokens: TokenMetrics | undefined;
+      if (inTok > 0 || outTok > 0 || cacheTok > 0) {
+        stepTokens = {
+          inputTokens: inTok,
+          outputTokens: outTok,
+          cacheReadTokens: cacheTok,
+          totalTokens: inTok + outTok
+        };
+        totalInputTokens += inTok;
+        totalOutputTokens += outTok;
+        totalCacheReadTokens += cacheTok;
+      }
+
+      const matchedSubagent = subagents.find(s => s.stepIndex === (raw.step_index ?? i));
 
       timelineSteps.push({
         stepIndex: raw.step_index ?? i,
@@ -369,16 +568,14 @@ export function parseConversationTimeline(conversationId: string): ParsedConvers
         thinking,
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
         assistantResponse: raw.content || '',
+        tokenMetrics: stepTokens,
+        subagent: matchedSubagent,
         rawPayload: raw
       });
-    } else if (['RUN_COMMAND', 'VIEW_FILE', 'CODE_ACTION', 'READ_URL_CONTENT', 'SEARCH_WEB', 'LIST_DIRECTORY', 'CHECKPOINT', 'CONVERSATION_HISTORY'].includes(stepType)) {
+    } else if (['RUN_COMMAND', 'VIEW_FILE', 'CODE_ACTION', 'READ_URL_CONTENT', 'SEARCH_WEB', 'LIST_DIRECTORY', 'CHECKPOINT', 'CONVERSATION_HISTORY', 'GENERIC'].includes(stepType)) {
       // Standalone or unlinked step (e.g., initial knowledge artifacts, checkpoints)
       // We keep non-paired steps so nothing is hidden
-      const isAlreadyPaired = timelineSteps.some(step => 
-        step.toolCalls?.some(tc => tc.result?.type === stepType && tc.result?.content === raw.content)
-      );
-
-      if (!isAlreadyPaired) {
+      if (!pairedStepIndices.has(i)) {
         timelineSteps.push({
           stepIndex: raw.step_index ?? i,
           type: stepType,
@@ -396,6 +593,22 @@ export function parseConversationTimeline(conversationId: string): ParsedConvers
   const updatedAt = rawSteps[rawSteps.length - 1]?.created_at || createdAt;
   const durationMs = Math.max(0, new Date(updatedAt).getTime() - new Date(createdAt).getTime());
 
+  const totalPromptTokens = totalInputTokens + totalCacheReadTokens;
+  const cacheHitRatePercent = totalPromptTokens > 0
+    ? Math.min(100, Math.round((totalCacheReadTokens / totalPromptTokens) * 100))
+    : 0;
+
+  const estimatedCostUsd = calculateEstimatedCost(model, totalInputTokens, totalOutputTokens, totalCacheReadTokens);
+
+  const tokenStats: SessionTokenStats = {
+    totalInputTokens,
+    totalOutputTokens,
+    totalCacheReadTokens,
+    totalTokens: totalPromptTokens + totalOutputTokens,
+    cacheHitRatePercent,
+    estimatedCostUsd
+  };
+
   return {
     id: conversationId,
     createdAt,
@@ -405,7 +618,10 @@ export function parseConversationTimeline(conversationId: string): ParsedConvers
     model,
     environmentSnapshot: initialEnvironmentSnapshot,
     toolStats,
+    tokenStats,
     totalSteps: rawSteps.length,
+    parentSessionId,
+    subagents: subagents.length > 0 ? subagents : undefined,
     steps: timelineSteps
   };
 }

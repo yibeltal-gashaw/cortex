@@ -14,8 +14,19 @@ export function getDefaultDataDir(): string {
   }
 
   const userHome = os.homedir();
-  const defaultPath = path.join(userHome, '.gemini', 'antigravity-ide');
-  return defaultPath;
+  // Check modern Antigravity path (~/.gemini/antigravity)
+  const modernPath = path.join(userHome, '.gemini', 'antigravity');
+  if (fs.existsSync(modernPath)) {
+    return modernPath;
+  }
+
+  // Check legacy Antigravity IDE path (~/.gemini/antigravity-ide)
+  const legacyPath = path.join(userHome, '.gemini', 'antigravity-ide');
+  if (fs.existsSync(legacyPath)) {
+    return legacyPath;
+  }
+
+  return modernPath;
 }
 
 let currentDataDir: string = getDefaultDataDir();
@@ -32,11 +43,12 @@ export function setDataDir(newPath: string): { success: boolean; message: string
 
   const hasBrain = fs.existsSync(path.join(resolved, 'brain'));
   const hasConversations = fs.existsSync(path.join(resolved, 'conversations'));
+  const hasUnifiedDb = fs.existsSync(path.join(resolved, 'conversation_summaries.db'));
 
-  if (!hasBrain && !hasConversations) {
+  if (!hasBrain && !hasConversations && !hasUnifiedDb) {
     return {
       success: false,
-      message: `Directory does not appear to be an Antigravity IDE directory (missing 'brain' and 'conversations' folders): ${resolved}`,
+      message: `Directory does not appear to be an Antigravity directory (missing 'brain' or 'conversations' folder): ${resolved}`,
       dataDir: currentDataDir
     };
   }

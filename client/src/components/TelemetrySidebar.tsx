@@ -85,9 +85,11 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
         if (
           tc.name === 'replace_file_content' ||
           tc.name === 'write_to_file' ||
-          tc.name === 'multi_replace_file_content'
+          tc.name === 'multi_replace_file_content' ||
+          tc.name === 'edit_file' ||
+          tc.name === 'write_file'
         ) {
-          const rawFilePath = tc.args.TargetFile || tc.result?.diff?.targetFile;
+          const rawFilePath = tc.args.Path || tc.args.TargetFile || tc.args.path || tc.result?.diff?.targetFile;
           if (rawFilePath) {
             const cleanPath = cleanFilePath(rawFilePath);
             const relPath = cleanPath.split('/').slice(-2).join('/');
@@ -100,8 +102,8 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
               const newLines = newNorm ? newNorm.split('\n').length : 0;
               existing.additions += Math.max(0, newLines);
               existing.deletions += Math.max(0, oldLines);
-            } else if (tc.args.ReplacementContent || tc.args.CodeContent) {
-              const norm = normalizeContent(tc.args.ReplacementContent || tc.args.CodeContent || '');
+            } else if (tc.args.Replacement || tc.args.ReplacementContent || tc.args.Content || tc.args.CodeContent) {
+              const norm = normalizeContent(tc.args.Replacement || tc.args.ReplacementContent || tc.args.Content || tc.args.CodeContent || '');
               const added = norm ? norm.split('\n').length : 1;
               existing.additions += added;
             } else {
@@ -120,8 +122,8 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
     deletions: diff.deletions
   }));
 
-  // Estimate tokens if not present
-  const estimatedTokens = Math.min(
+  // Actual or estimated tokens
+  const totalTokens = session.tokenStats?.totalTokens ?? Math.min(
     128000,
     Math.round(session.steps.reduce((acc, s) => acc + (s.thinking?.length || 0) + (s.assistantResponse?.length || 0) + 150, 0) / 4)
   );
@@ -240,9 +242,15 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
                   <span className="telemetry-key">
                     <Cpu size={13} className="kv-icon" /> Tokens Used
                   </span>
-                  <span className="telemetry-val font-semibold mono">
-                    {estimatedTokens.toLocaleString()}
-                  </span>
+                  <div className="telemetry-val" style={{ textAlign: 'right' }}>
+                    <span className="font-semibold mono">{totalTokens.toLocaleString()}</span>
+                    {session.tokenStats?.estimatedCostUsd !== undefined && (
+                      <span className="text-muted mono" style={{ fontSize: '10px', display: 'block' }}>
+                        ~${session.tokenStats.estimatedCostUsd.toFixed(4)}
+                        {session.tokenStats.cacheHitRatePercent > 0 ? ` • ${session.tokenStats.cacheHitRatePercent}% cache` : ''}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -315,10 +323,10 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
                 ) : (
                   Object.entries(session.toolStats).map(([toolName, count], idx) => {
                     const formatToolName = (name: string) => {
-                      if (name === 'replace_file_content' || name === 'write_to_file') return 'Edit File';
+                      if (name === 'replace_file_content' || name === 'write_to_file' || name === 'edit_file' || name === 'write_file' || name === 'multi_replace_file_content') return 'Edit File';
                       if (name === 'run_command') return 'Terminal Command';
                       if (name === 'search_web') return 'Search Web';
-                      if (name === 'view_file') return 'View File';
+                      if (name === 'view_file' || name === 'read_file') return 'View File';
                       if (name === 'list_dir') return 'List Directory';
                       return name.replace(/_/g, ' ');
                     };
@@ -364,6 +372,68 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
         ) : (
           /* Telemetry Performance Metrics View */
           <div className="telemetry-metrics-view">
+            {/* Token & Cost Intelligence Card */}
+            <div className="telemetry-card-metric" style={{ borderLeft: '3px solid var(--cortex-synapse-purple)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span className="metric-label" style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Token & Cost Intelligence</span>
+                {session.tokenStats && session.tokenStats.cacheHitRatePercent > 0 && (
+                  <span className="mini-badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10B981', fontWeight: 600 }}>
+                    {session.tokenStats.cacheHitRatePercent}% Cache Hit
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+                <div>
+                  <span className="text-muted" style={{ fontSize: '10px' }}>Estimated Cost</span>
+                  <div className="mono font-semibold" style={{ fontSize: '14px', color: 'var(--cortex-execution-green)' }}>
+                    ${session.tokenStats?.estimatedCostUsd !== undefined ? session.tokenStats.estimatedCostUsd.toFixed(4) : '0.0000'}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-muted" style={{ fontSize: '10px' }}>Total Tokens</span>
+                  <div className="mono font-semibold" style={{ fontSize: '14px' }}>
+                    {totalTokens.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress bar breakdown */}
+              {session.tokenStats && session.tokenStats.totalInputTokens > 0 && (
+                <>
+                  <div style={{ height: '6px', width: '100%', background: 'var(--border-subtle)', borderRadius: '3px', overflow: 'hidden', display: 'flex', marginBottom: '6px' }}>
+                    <div
+                      style={{
+                        width: `${Math.round((session.tokenStats.totalCacheReadTokens / (session.tokenStats.totalTokens || 1)) * 100)}%`,
+                        background: '#10B981'
+                      }}
+                      title={`Cached Tokens: ${session.tokenStats.totalCacheReadTokens.toLocaleString()}`}
+                    />
+                    <div
+                      style={{
+                        width: `${Math.round(((session.tokenStats.totalInputTokens - session.tokenStats.totalCacheReadTokens) / (session.tokenStats.totalTokens || 1)) * 100)}%`,
+                        background: 'var(--cortex-synapse-purple)'
+                      }}
+                      title={`Fresh Input Tokens: ${(session.tokenStats.totalInputTokens - session.tokenStats.totalCacheReadTokens).toLocaleString()}`}
+                    />
+                    <div
+                      style={{
+                        width: `${Math.round((session.tokenStats.totalOutputTokens / (session.tokenStats.totalTokens || 1)) * 100)}%`,
+                        background: 'var(--cortex-cognitive-teal)'
+                      }}
+                      title={`Output Tokens: ${session.tokenStats.totalOutputTokens.toLocaleString()}`}
+                    />
+                  </div>
+
+                  <div className="mono" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: 'var(--text-muted)' }}>
+                    <span style={{ color: '#10B981' }}>● Cached ({session.tokenStats.totalCacheReadTokens.toLocaleString()})</span>
+                    <span style={{ color: 'var(--cortex-synapse-purple)' }}>● Fresh ({(session.tokenStats.totalInputTokens - session.tokenStats.totalCacheReadTokens).toLocaleString()})</span>
+                    <span style={{ color: 'var(--cortex-cognitive-teal)' }}>● Out ({session.tokenStats.totalOutputTokens.toLocaleString()})</span>
+                  </div>
+                </>
+              )}
+            </div>
+
             <div className="telemetry-card-metric">
               <span className="metric-label">Execution Velocity</span>
               <span className="metric-big-val">{(session.totalSteps / Math.max(1, (session.durationMs / 60000))).toFixed(1)} steps/min</span>

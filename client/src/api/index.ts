@@ -4,6 +4,7 @@ import {
   ParsedConversationSession,
   ArtifactOverview,
   DatabaseInfo,
+  SqlQueryResult,
   DirectoryBrowseResult
 } from '../types/index.js';
 
@@ -83,8 +84,10 @@ export async function fetchArtifactFile(id: string, filePath: string): Promise<A
   return res.json();
 }
 
-export async function fetchDatabaseInfo(id: string): Promise<DatabaseInfo> {
-  const res = await fetch(`${API_BASE}/conversations/${id}/db`);
+export async function fetchDatabaseInfo(id: string, isGlobal?: boolean): Promise<DatabaseInfo> {
+  const params = new URLSearchParams();
+  if (isGlobal) params.set('global', 'true');
+  const res = await fetch(`${API_BASE}/conversations/${id}/db?${params.toString()}`);
   if (!res.ok) throw new Error(`Failed to fetch database info: ${res.statusText}`);
   return res.json();
 }
@@ -92,16 +95,32 @@ export async function fetchDatabaseInfo(id: string): Promise<DatabaseInfo> {
 export async function fetchTableRows(
   id: string,
   tableName: string,
-  options?: { limit?: number; offset?: number; search?: string }
+  options?: { limit?: number; offset?: number; search?: string; isGlobal?: boolean }
 ): Promise<{ rows: any[]; total: number; columns: any[] }> {
   const params = new URLSearchParams();
   if (options?.limit) params.set('limit', options.limit.toString());
   if (options?.offset) params.set('offset', options.offset.toString());
   if (options?.search) params.set('search', options.search);
+  if (options?.isGlobal) params.set('global', 'true');
 
   const res = await fetch(`${API_BASE}/conversations/${id}/db/table/${encodeURIComponent(tableName)}?${params.toString()}`);
   if (!res.ok) throw new Error(`Failed to fetch rows for table ${tableName}: ${res.statusText}`);
   return res.json();
+}
+
+export async function executeSqlQuery(
+  id: string,
+  sql: string,
+  isGlobal?: boolean
+): Promise<SqlQueryResult> {
+  const res = await fetch(`${API_BASE}/conversations/${id}/db/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sql, isGlobal })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to execute SQL query');
+  return data;
 }
 
 export async function deleteConversation(id: string): Promise<{ success: boolean; message: string; deletedItems: string[] }> {
@@ -183,4 +202,49 @@ export async function selectDirectoryNative(defaultPath?: string): Promise<strin
   }
   const data = await res.json();
   return data.path || null;
+}
+
+export function createConversationStream(
+  id: string,
+  callbacks: {
+    onInitial?: (session: ParsedConversationSession) => void;
+    onUpdate?: (session: ParsedConversationSession, stepDiff: number) => void;
+    onError?: (err: any) => void;
+    onStatusChange?: (connected: boolean) => void;
+  }
+): () => void {
+  const url = `${API_BASE}/conversations/${id}/stream`;
+  const eventSource = new EventSource(url);
+
+  eventSource.onopen = () => {
+    callbacks.onStatusChange?.(true);
+  };
+
+  eventSource.addEventListener('initial', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      callbacks.onInitial?.(data);
+    } catch (err) {
+      console.error('Error parsing initial SSE session:', err);
+    }
+  });
+
+  eventSource.addEventListener('update', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      callbacks.onUpdate?.(data.session, data.stepDiff);
+    } catch (err) {
+      console.error('Error parsing updated SSE session:', err);
+    }
+  });
+
+  eventSource.onerror = (err) => {
+    callbacks.onStatusChange?.(false);
+    callbacks.onError?.(err);
+  };
+
+  return () => {
+    eventSource.close();
+    callbacks.onStatusChange?.(false);
+  };
 }

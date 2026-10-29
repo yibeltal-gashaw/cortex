@@ -16,7 +16,9 @@ import {
   PanelRightClose,
   PanelRightOpen,
   MessageSquare,
-  Loader2
+  Loader2,
+  Bell,
+  Volume2
 } from 'lucide-react';
 import { AppStatus } from '../types/index.js';
 import { updateDataDir, selectDirectoryNative } from '../api/index.js';
@@ -36,6 +38,12 @@ interface SettingsPageProps {
   isTelemetryOpen?: boolean;
   onToggleTelemetry?: () => void;
   activeSessionTitle?: string | null;
+  notificationsEnabled?: boolean;
+  notificationPermission?: NotificationPermission;
+  soundEnabled?: boolean;
+  onToggleNotifications?: () => void;
+  onToggleSound?: () => void;
+  onTestNotification?: () => void;
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
@@ -52,7 +60,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onToggleSidebar,
   isTelemetryOpen = true,
   onToggleTelemetry,
-  activeSessionTitle
+  activeSessionTitle,
+  notificationsEnabled = true,
+  notificationPermission = 'default',
+  soundEnabled = true,
+  onToggleNotifications,
+  onToggleSound,
+  onTestNotification
 }) => {
   const [customPath, setCustomPath] = useState(status?.dataDir || '');
   const [saving, setSaving] = useState(false);
@@ -235,7 +249,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     className="settings-text-input mono"
                     value={customPath}
                     onChange={(e) => setCustomPath(e.target.value)}
-                    placeholder="C:\Users\username\.gemini\antigravity-ide"
+                    placeholder="C:\Users\username\.gemini\antigravity"
                     spellCheck={false}
                   />
                   <button
@@ -366,6 +380,82 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </div>
             </section>
           )}
+
+          {/* Section: Desktop & Audio Notifications on Task Completion */}
+          <section className="settings-card">
+            <div className="settings-card-header">
+              <div className="settings-card-header-icon">
+                <Bell size={18} color="var(--cortex-synapse-purple)" />
+              </div>
+              <div>
+                <h3 className="settings-card-title">Desktop & Audio Notifications</h3>
+                <p className="settings-card-desc">
+                  Receive instant alerts and chimes when long-running agent workflows complete.
+                </p>
+              </div>
+            </div>
+
+            <div className="settings-card-body">
+              <div className="settings-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--border-subtle)' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--cortex-deep-thought)' }}>
+                    Desktop Notifications
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    Display system notifications when browser/app window is in the background. Status: <span className="mono" style={{ color: notificationPermission === 'granted' ? '#10b981' : '#f59e0b' }}>{notificationPermission}</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {onToggleNotifications && (
+                    <button
+                      type="button"
+                      className={`metric-pill ${notificationsEnabled ? 'active' : ''}`}
+                      onClick={onToggleNotifications}
+                    >
+                      {notificationsEnabled ? 'Enabled' : 'Disabled'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="settings-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '12px' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--cortex-deep-thought)' }}>
+                    Audio Chime on Completion
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    Play a gentle harmonic chime when an agent turn finishes.
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {onTestNotification && (
+                    <button
+                      type="button"
+                      className="copy-btn"
+                      onClick={onTestNotification}
+                      style={{ fontSize: '11px', padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                      title="Play sample chime"
+                    >
+                      <Volume2 size={12} />
+                      <span>Test Chime</span>
+                    </button>
+                  )}
+
+                  {onToggleSound && (
+                    <button
+                      type="button"
+                      className={`metric-pill ${soundEnabled ? 'active' : ''}`}
+                      onClick={onToggleSound}
+                    >
+                      {soundEnabled ? 'Sound ON' : 'Sound OFF'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
 
           {/* Section 3: Runtime Diagnostics & System Information */}
           <section className="settings-card">

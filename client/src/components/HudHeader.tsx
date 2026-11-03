@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  ChevronDown,
   Trash2,
   PanelRightClose,
   PanelRightOpen,
@@ -12,10 +11,7 @@ import {
   Download,
   FileText,
   Globe,
-  GitCompare,
-  Activity,
-  FolderKanban,
-  Database
+  GitCompare
 } from 'lucide-react';
 import { ParsedConversationSession } from '../types/index.js';
 import { useAgentPermissions } from '../hooks/useAgentPermissions.js';
@@ -69,12 +65,8 @@ export const HudHeader: React.FC<HudHeaderProps> = ({
   onRefreshSession,
   autoRefreshEnabled = true,
   lastRefreshed = null,
-  isLiveStreaming = false,
   onSelectConversation,
-  onOpenComparison,
-  activeSubTab = 'timeline',
-  onSelectSubTab,
-  artifactsCount = 0
+  onOpenComparison
 }) => {
   const { interceptSkillExecution } = useAgentPermissions();
   const [isDagModalOpen, setIsDagModalOpen] = React.useState(false);
@@ -122,16 +114,18 @@ export const HudHeader: React.FC<HudHeaderProps> = ({
           </button>
         )}
         <div className="hud-breadcrumbs">
-          <span className="hud-workspace-crumb">{workspaceName}</span>
+          <span className="hud-workspace-crumb truncate" title={`Workspace: ${workspaceName}`}>{workspaceName}</span>
           <span className="hud-crumb-slash">/</span>
-          <div className="hud-session-title-wrap">
-            <span className="hud-session-title">
+          {session && (
+            <span
+              className="hud-session-title truncate"
+              title={session?.steps[0]?.userPrompt?.requestText || session?.id}
+            >
               {session?.steps[0]?.userPrompt?.requestText
-                ? session.steps[0].userPrompt.requestText.slice(0, 48) + (session.steps[0].userPrompt.requestText.length > 48 ? '...' : '')
+                ? session.steps[0].userPrompt.requestText
                 : session?.id || 'Select Session'}
             </span>
-            <ChevronDown size={14} className="hud-chevron" />
-          </div>
+          )}
           {session?.model && (
             <span className="hud-version-badge" title={`Model: ${session.model}`}>
               {session.model}
@@ -174,50 +168,7 @@ export const HudHeader: React.FC<HudHeaderProps> = ({
         </div>
       </div>
 
-      {/* Center: Primary View Switcher Tabs */}
-      {session && onSelectSubTab && (
-        <div className="hud-header-center-nav">
-          <button
-            className={`hud-header-tab ${activeSubTab === 'timeline' ? 'active' : ''}`}
-            onClick={() => onSelectSubTab('timeline')}
-            title="Timeline feed of execution events & tool invocations"
-          >
-            <Activity size={13} />
-            <span>Timeline</span>
-            <span className="hud-tab-counter mono">{session.steps.length}</span>
-          </button>
-
-          <button
-            className={`hud-header-tab ${activeSubTab === 'artifacts' ? 'active' : ''}`}
-            onClick={() => onSelectSubTab('artifacts')}
-            title="Session Artifacts, Sandboxed Web UI, and Background Tasks"
-          >
-            <FolderKanban size={13} />
-            <span>Artifacts</span>
-            {artifactsCount > 0 && (
-              <span className="hud-tab-counter mono">{artifactsCount}</span>
-            )}
-          </button>
-
-          <button
-            className={`hud-header-tab ${activeSubTab === 'db' ? 'active' : ''}`}
-            onClick={() => onSelectSubTab('db')}
-            title="SQLite Database Tables & Ad-hoc SQL Query Console"
-          >
-            <Database size={13} />
-            <span>Database</span>
-          </button>
-        </div>
-      )}
-
-      {/* Right: Actions, Fullscreen, Notifications, Profile Avatar & Sidebar Toggle */}
       <div className="hud-header-right">
-        {isLiveStreaming && (
-          <div className="hud-live-indicator" title="Connected to Real-Time SSE Stream (Delta updates enabled)">
-            <span className="live-ping-dot" />
-            <span className="live-text mono">LIVE</span>
-          </div>
-        )}
 
         {onRefreshSession && (
           <button

@@ -67,6 +67,7 @@ export interface ToolCallItem {
     status?: string;
     exitCode?: number;
     content?: string;
+    durationMs?: number;
     diff?: {
       targetFile: string;
       oldContent: string;

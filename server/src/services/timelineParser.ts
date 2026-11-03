@@ -29,6 +29,7 @@ export interface ToolCallItem {
     status?: string;
     exitCode?: number;
     content?: string;
+    durationMs?: number;
     diff?: {
       targetFile: string;
       oldContent: string;
@@ -441,6 +442,15 @@ export function parseConversationTimeline(conversationId: string): ParsedConvers
             break;
           }
 
+          let toolDurationMs: number | undefined;
+          if (raw.created_at && nextRaw.created_at) {
+            const start = new Date(raw.created_at).getTime();
+            const end = new Date(nextRaw.created_at).getTime();
+            if (!isNaN(start) && !isNaN(end) && end >= start) {
+              toolDurationMs = end - start;
+            }
+          }
+
           // Pair RUN_COMMAND (handles RUN_COMMAND or GENERIC)
           if (isCommandTool(name) && (nextRaw.type === 'RUN_COMMAND' || nextRaw.type === 'GENERIC')) {
             const exitCode = parseCommandExitCode(nextRaw);
@@ -448,7 +458,8 @@ export function parseConversationTimeline(conversationId: string): ParsedConvers
               type: 'RUN_COMMAND',
               status: nextRaw.status || (exitCode === 0 ? 'DONE' : 'ERROR'),
               exitCode,
-              content: nextRaw.content
+              content: nextRaw.content,
+              durationMs: toolDurationMs
             };
             pairedStepIndices.add(j);
             break;
@@ -459,6 +470,7 @@ export function parseConversationTimeline(conversationId: string): ParsedConvers
             toolItem.result = {
               type: 'VIEW_FILE',
               status: nextRaw.status || 'DONE',
+              durationMs: toolDurationMs,
               viewedFile: extractViewedFileInfo(toolItem.args, nextRaw.content || '')
             };
             pairedStepIndices.add(j);
@@ -471,6 +483,7 @@ export function parseConversationTimeline(conversationId: string): ParsedConvers
               type: 'CODE_ACTION',
               status: nextRaw.status || 'DONE',
               content: nextRaw.content,
+              durationMs: toolDurationMs,
               diff: extractEditFileDiff(name, toolItem.args, nextRaw.content)
             };
             pairedStepIndices.add(j);
@@ -482,7 +495,8 @@ export function parseConversationTimeline(conversationId: string): ParsedConvers
             toolItem.result = {
               type: name === 'search_web' ? 'SEARCH_WEB' : 'READ_URL_CONTENT',
               status: nextRaw.status || 'DONE',
-              content: nextRaw.content
+              content: nextRaw.content,
+              durationMs: toolDurationMs
             };
             pairedStepIndices.add(j);
             break;
@@ -493,7 +507,8 @@ export function parseConversationTimeline(conversationId: string): ParsedConvers
             toolItem.result = {
               type: nextRaw.type,
               status: nextRaw.status || 'DONE',
-              content: cleanContentString(nextRaw.content)
+              content: cleanContentString(nextRaw.content),
+              durationMs: toolDurationMs
             };
             pairedStepIndices.add(j);
             break;

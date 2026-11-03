@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { marked } from 'marked';
+import { sanitizeHtml } from '../utils/sanitizeHtml.js';
 
 interface ThinkingBlockProps {
   thinking: string;
@@ -11,7 +12,7 @@ export const ThinkingBlock: React.FC<ThinkingBlockProps> = ({ thinking }) => {
 
   if (!thinking) return null;
 
-  const htmlContent = marked.parse(thinking, { breaks: true, gfm: true }) as string;
+  const htmlContent = sanitizeHtml(marked.parse(thinking, { breaks: true, gfm: true }) as string);
   const wordCount = thinking.trim().split(/\s+/).length;
 
   return (

@@ -54,6 +54,24 @@ function formatRelativeTime(iso: string): string {
   }
 }
 
+function formatSessionDuration(createdAt?: string, updatedAt?: string): string | null {
+  if (!createdAt || !updatedAt) return null;
+  try {
+    const start = new Date(createdAt).getTime();
+    const end = new Date(updatedAt).getTime();
+    if (isNaN(start) || isNaN(end) || end < start) return null;
+    const diffMs = end - start;
+    if (diffMs < 1000) return '< 1s';
+    const totalSecs = Math.floor(diffMs / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    if (mins === 0) return `${secs}s`;
+    return `${mins}m ${secs}s`;
+  } catch {
+    return null;
+  }
+}
+
 export const Sidebar: React.FC<SidebarProps> = ({
   conversations,
   workspaces,
@@ -309,11 +327,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </span>
                       </>
                     ) : null}
-                    <span className="card-dot-sep">·</span>
-                    <span className="card-duration">
-                      <Clock size={11} style={{ verticalAlign: '-1px', marginRight: '3px' }} />
-                      {c.stepCount > 0 ? `${Math.max(1, Math.round(c.stepCount * 0.35))}m ${Math.round((c.stepCount * 17) % 60)}s` : '0m 12s'}
-                    </span>
+                    {(() => {
+                      const dur = formatSessionDuration(c.createdAt, c.updatedAt);
+                      if (!dur) return null;
+                      return (
+                        <>
+                          <span className="card-dot-sep">·</span>
+                          <span className="card-duration" title={`Elapsed Duration: ${dur}`}>
+                            <Clock size={11} style={{ verticalAlign: '-1px', marginRight: '3px' }} />
+                            {dur}
+                          </span>
+                        </>
+                      );
+                    })()}
 
                     <button
                       type="button"

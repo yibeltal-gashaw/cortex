@@ -537,7 +537,6 @@ const AppContent: React.FC = () => {
                         <ArtifactsTab
                           conversationId={session.id}
                           artifacts={artifacts}
-                          isRightPanelOpen={isTelemetryOpen}
                         />
                       ) : (
                         <div className="hud-loading-state">
@@ -551,7 +550,6 @@ const AppContent: React.FC = () => {
                         <DatabaseTab
                           conversationId={session.id}
                           dbInfo={dbInfo}
-                          isRightPanelOpen={isTelemetryOpen}
                         />
                       ) : (
                         <div className="hud-loading-state">
@@ -560,7 +558,7 @@ const AppContent: React.FC = () => {
                       )}
                     </div>
                   ) : session ? (
-                    <Timeline steps={session.steps} conversationId={session.id} focusedFile={focusedFile} />
+                    <Timeline steps={session.steps} conversationId={session.id} focusedFile={focusedFile} sessionModel={session.model} />
                   ) : (
                     <div className="hud-no-selection-state">
                       <MessageSquare size={44} />

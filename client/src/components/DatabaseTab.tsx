@@ -22,7 +22,9 @@ import {
   Download,
   RotateCcw,
   Sparkles,
-  Globe
+  Globe,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 import JsonView from '@uiw/react-json-view';
 import { lightTheme } from '@uiw/react-json-view/light';
@@ -146,9 +148,9 @@ function renderStatus(statusVal: number) {
 
 export const DatabaseTab: React.FC<DatabaseTabProps> = ({
   conversationId,
-  dbInfo: initialDbInfo,
-  isRightPanelOpen = true
+  dbInfo: initialDbInfo
 }) => {
+  const [isTableListCollapsed, setIsTableListCollapsed] = useState<boolean>(false);
   const [currentDbInfo, setCurrentDbInfo] = useState<DatabaseInfo>(initialDbInfo);
   const [isGlobalMode, setIsGlobalMode] = useState<boolean>(Boolean(initialDbInfo.isGlobal));
   const [viewMode, setViewMode] = useState<'table' | 'sql'>('table');
@@ -311,10 +313,76 @@ export const DatabaseTab: React.FC<DatabaseTabProps> = ({
 
   return (
     <div className="db-view">
+      {/* 1. Left Sidebar: Table List (Collapsible) */}
+      {!isTableListCollapsed && (
+        <div className="db-sidebar">
+          <div className="db-sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div className="db-sidebar-title">
+                <Database size={14} color="var(--cortex-synapse-purple)" />
+                <span>SQLite Tables ({currentDbInfo.tables?.length || 0})</span>
+              </div>
+              <span className="db-sidebar-sub mono truncate" title={currentDbInfo.dbPath}>
+                {currentDbInfo.dbPath.split(/[\\/]/).pop()}
+              </span>
+            </div>
+            <button
+              className="hud-action-icon-btn"
+              style={{ width: '24px', height: '24px', padding: 0, flexShrink: 0 }}
+              onClick={() => setIsTableListCollapsed(true)}
+              title="Collapse Table List"
+              aria-label="Collapse Table List"
+            >
+              <PanelLeftClose size={13} />
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {currentDbInfo.tables?.map((t) => {
+              const isActive = t.name === selectedTable;
+              return (
+                <button
+                  key={t.name}
+                  className={`db-table-btn ${isActive ? 'active' : ''}`}
+                  onClick={() => {
+                    setSelectedTable(t.name);
+                    setPage(0);
+                    if (viewMode === 'sql') {
+                      setSqlQuery(`SELECT * FROM ${t.name} LIMIT 25;`);
+                    }
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Table size={13} color={isActive ? 'var(--cortex-synapse-purple)' : 'var(--text-muted)'} />
+                    <span className="mono">{t.name}</span>
+                  </div>
+                  <span className="mini-badge mono" style={{ background: t.rowCount > 0 ? 'var(--cortex-cognitive-teal-bg)' : 'var(--bg-subtle)', color: t.rowCount > 0 ? 'var(--cortex-cognitive-teal)' : 'var(--text-muted)' }}>
+                    {t.rowCount}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 2. Main Panel */}
       <div className="db-main-panel">
         {/* Top Control Bar: Mode Selector & Source Switcher */}
         <div className="db-table-toolbar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {isTableListCollapsed && (
+              <button
+                className="metric-pill"
+                onClick={() => setIsTableListCollapsed(false)}
+                title="Expand SQLite Table List"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11px', padding: '4px 8px' }}
+              >
+                <PanelLeftOpen size={13} />
+                <span>Tables ({currentDbInfo.tables?.length || 0})</span>
+              </button>
+            )}
+
             <div className="db-mode-selector">
               <button
                 className={`db-mode-btn ${viewMode === 'table' ? 'active' : ''}`}
@@ -720,48 +788,6 @@ export const DatabaseTab: React.FC<DatabaseTabProps> = ({
           </div>
         )}
       </div>
-
-      {/* Right Sidebar: Table List */}
-      {isRightPanelOpen && (
-        <div className="db-sidebar">
-          <div className="db-sidebar-header">
-            <div className="db-sidebar-title">
-              <Database size={15} color="var(--cortex-synapse-purple)" />
-              <span>SQLite Tables ({currentDbInfo.tables?.length || 0})</span>
-            </div>
-            <span className="db-sidebar-sub mono truncate" title={currentDbInfo.dbPath}>
-              {currentDbInfo.dbPath.split(/[\\/]/).pop()}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {currentDbInfo.tables?.map((t) => {
-              const isActive = t.name === selectedTable;
-              return (
-                <button
-                  key={t.name}
-                  className={`db-table-btn ${isActive ? 'active' : ''}`}
-                  onClick={() => {
-                    setSelectedTable(t.name);
-                    setPage(0);
-                    if (viewMode === 'sql') {
-                      setSqlQuery(`SELECT * FROM ${t.name} LIMIT 25;`);
-                    }
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Table size={13} color={isActive ? 'var(--cortex-synapse-purple)' : 'var(--text-muted)'} />
-                    <span className="mono">{t.name}</span>
-                  </div>
-                  <span className="mini-badge mono" style={{ background: t.rowCount > 0 ? 'var(--cortex-cognitive-teal-bg)' : 'var(--bg-subtle)', color: t.rowCount > 0 ? 'var(--cortex-cognitive-teal)' : 'var(--text-muted)' }}>
-                    {t.rowCount}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Multi-Tab Blob Inspection Modal */}
       {activeBlobModal && (() => {

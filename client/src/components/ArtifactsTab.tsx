@@ -17,9 +17,12 @@ import {
   Maximize2,
   Download,
   Layers,
-  X
+  X,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 import { marked } from 'marked';
+import { sanitizeHtml } from '../utils/sanitizeHtml.js';
 import { ArtifactOverview, FileTreeNode } from '../types/index.js';
 import { fetchArtifactFile } from '../api/index.js';
 import { JsonViewerPanel } from './JsonViewerPanel.js';
@@ -84,9 +87,9 @@ function preprocessMarkdownImages(md: string, convId: string): string {
 
 export const ArtifactsTab: React.FC<ArtifactsTabProps> = ({
   conversationId,
-  artifacts,
-  isRightPanelOpen = true
+  artifacts
 }) => {
+  const [isExplorerCollapsed, setIsExplorerCollapsed] = useState<boolean>(false);
   const [selectedPath, setSelectedPath] = useState<string>('implementation_plan.md');
   const [fileContent, setFileContent] = useState<string>(artifacts.planContent || '');
   const [loading, setLoading] = useState<boolean>(false);
@@ -307,11 +310,113 @@ export const ArtifactsTab: React.FC<ArtifactsTabProps> = ({
 
   return (
     <div className="artifacts-view">
-      
+      {/* 1. Left Explorer Panel (Collapsible) */}
+      {!isExplorerCollapsed && (
+        <div className="artifacts-tree-panel">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px 10px 12px', borderBottom: '1px solid var(--cortex-grey-matter-border)' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--cortex-grey-matter)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Artifacts Explorer
+            </span>
+            <button
+              className="hud-action-icon-btn"
+              style={{ width: '24px', height: '24px', padding: 0 }}
+              onClick={() => setIsExplorerCollapsed(true)}
+              title="Collapse Explorer"
+              aria-label="Collapse Artifacts Explorer"
+            >
+              <PanelLeftClose size={14} />
+            </button>
+          </div>
 
+          <div style={{ padding: '8px 10px 12px 10px', borderBottom: '1px solid var(--cortex-grey-matter-border)', marginBottom: '8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--cortex-grey-matter)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Artifact Shortcuts
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+              {artifacts.hasPlan && (
+                <button
+                  className={`tree-node-item ${selectedPath === 'implementation_plan.md' ? 'selected' : ''}`}
+                  onClick={() => loadFile('implementation_plan.md')}
+                >
+                  <FileText size={14} color="var(--cortex-execution-green)" />
+                  <span style={{ color: 'var(--cortex-deep-thought)', fontWeight: 600 }}>implementation_plan.md</span>
+                </button>
+              )}
+              {artifacts.hasWalkthrough && (
+                <button
+                  className={`tree-node-item ${selectedPath === 'walkthrough.md' ? 'selected' : ''}`}
+                  onClick={() => loadFile('walkthrough.md')}
+                >
+                  <CheckCircle2 size={14} color="var(--cortex-execution-green)" />
+                  <span style={{ color: 'var(--cortex-deep-thought)', fontWeight: 600 }}>walkthrough.md</span>
+                </button>
+              )}
+              {artifacts.uploadedMedia.length > 0 && (
+                <button
+                  className={`tree-node-item ${selectedPath === '.user_uploaded' ? 'selected' : ''}`}
+                  onClick={() => {
+                    setSelectedPath('.user_uploaded');
+                    setMediaMeta(null);
+                  }}
+                >
+                  <ImageIcon size={14} color="var(--cortex-insight-amber)" />
+                  <span style={{ color: '#B45309', fontWeight: 600 }}>
+                    Uploaded Assets ({artifacts.uploadedMedia.length})
+                  </span>
+                </button>
+              )}
+
+              {artifacts.taskLogs.length > 0 && (
+                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                    Background Processes ({artifacts.taskLogs.length})
+                  </span>
+                  {artifacts.taskLogs.map(tl => (
+                    <button
+                      key={tl.name}
+                      className={`tree-node-item ${selectedPath === tl.relativePath ? 'selected' : ''}`}
+                      onClick={() => loadFile(tl.relativePath)}
+                      style={{ padding: '4px 6px' }}
+                    >
+                      <Terminal size={13} color="var(--cortex-synapse-purple)" />
+                      <span className="mono truncate" style={{ color: 'var(--cortex-deep-thought)', fontSize: '11px' }}>
+                        {tl.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ padding: '6px 10px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--cortex-grey-matter)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Cortex Workspace Tree
+            </span>
+            <div className="artifacts-tree-scroll" style={{ marginTop: '8px', overflowX: 'auto', paddingBottom: '6px' }}>
+              <div style={{ minWidth: 'max-content' }}>
+                {renderTreeNode(artifacts.tree)}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Right Content Panel */}
       <div className="artifacts-content-panel">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--cortex-grey-matter-border)', marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {isExplorerCollapsed && (
+              <button
+                className="metric-pill"
+                onClick={() => setIsExplorerCollapsed(false)}
+                title="Expand Artifacts Explorer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', padding: '4px 8px' }}
+              >
+                <PanelLeftOpen size={13} />
+                <span>Show Explorer</span>
+              </button>
+            )}
             {mediaMeta?.isImage ? (
               <ImageIcon size={18} color="var(--cortex-insight-amber)" />
             ) : isJsonFile(selectedPath) || isJsonlFile(selectedPath) ? (
@@ -490,7 +595,7 @@ export const ArtifactsTab: React.FC<ArtifactsTabProps> = ({
           <div
             className="markdown-body"
             dangerouslySetInnerHTML={{
-              __html: marked.parse(preprocessMarkdownImages(fileContent, conversationId), { breaks: true, gfm: true }) as string
+              __html: sanitizeHtml(marked.parse(preprocessMarkdownImages(fileContent, conversationId), { breaks: true, gfm: true }) as string)
             }}
           />
         ) : isJsonFile(selectedPath) || isJsonlFile(selectedPath) ? (
@@ -505,81 +610,6 @@ export const ArtifactsTab: React.FC<ArtifactsTabProps> = ({
           </pre>
         )}
       </div>
-      {isRightPanelOpen && (
-        <div className="artifacts-tree-panel">
-          <div style={{ padding: '6px 8px 12px 8px', borderBottom: '1px solid var(--cortex-grey-matter-border)', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--cortex-grey-matter)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Artifact Shortcuts
-            </span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
-              {artifacts.hasPlan && (
-                <button
-                  className={`tree-node-item ${selectedPath === 'implementation_plan.md' ? 'selected' : ''}`}
-                  onClick={() => loadFile('implementation_plan.md')}
-                >
-                  <FileText size={14} color="var(--cortex-execution-green)" />
-                  <span style={{ color: 'var(--cortex-deep-thought)', fontWeight: 600 }}>implementation_plan.md</span>
-                </button>
-              )}
-              {artifacts.hasWalkthrough && (
-                <button
-                  className={`tree-node-item ${selectedPath === 'walkthrough.md' ? 'selected' : ''}`}
-                  onClick={() => loadFile('walkthrough.md')}
-                >
-                  <CheckCircle2 size={14} color="var(--cortex-execution-green)" />
-                  <span style={{ color: 'var(--cortex-deep-thought)', fontWeight: 600 }}>walkthrough.md</span>
-                </button>
-              )}
-              {artifacts.uploadedMedia.length > 0 && (
-                <button
-                  className={`tree-node-item ${selectedPath === '.user_uploaded' ? 'selected' : ''}`}
-                  onClick={() => {
-                    setSelectedPath('.user_uploaded');
-                    setMediaMeta(null);
-                  }}
-                >
-                  <ImageIcon size={14} color="var(--cortex-insight-amber)" />
-                  <span style={{ color: '#B45309', fontWeight: 600 }}>
-                    Uploaded Assets ({artifacts.uploadedMedia.length})
-                  </span>
-                </button>
-              )}
-
-              {artifacts.taskLogs.length > 0 && (
-                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
-                    Background Processes ({artifacts.taskLogs.length})
-                  </span>
-                  {artifacts.taskLogs.map(tl => (
-                    <button
-                      key={tl.name}
-                      className={`tree-node-item ${selectedPath === tl.relativePath ? 'selected' : ''}`}
-                      onClick={() => loadFile(tl.relativePath)}
-                      style={{ padding: '4px 6px' }}
-                    >
-                      <Terminal size={13} color="var(--cortex-synapse-purple)" />
-                      <span className="mono truncate" style={{ color: 'var(--cortex-deep-thought)', fontSize: '11px' }}>
-                        {tl.name}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div style={{ padding: '6px 8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--cortex-grey-matter)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Cortex Workspace Tree
-            </span>
-            <div className="artifacts-tree-scroll" style={{ marginTop: '8px', overflowX: 'auto', paddingBottom: '6px' }}>
-              <div style={{ minWidth: 'max-content' }}>
-                {renderTreeNode(artifacts.tree)}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {activeMediaModal && (
         <div className="lightbox-modal" onClick={() => setActiveMediaModal(null)}>

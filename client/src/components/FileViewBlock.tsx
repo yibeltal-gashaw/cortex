@@ -12,6 +12,9 @@ interface FileViewBlockProps {
   toolAction?: string;
   toolSummary?: string;
   conversationId?: string;
+  hideHeader?: boolean;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
 export const FileViewBlock: React.FC<FileViewBlockProps> = ({
@@ -21,10 +24,22 @@ export const FileViewBlock: React.FC<FileViewBlockProps> = ({
   content,
   toolAction,
   toolSummary,
-  conversationId
+  conversationId,
+  hideHeader = false,
+  isExpanded: externalExpanded,
+  onToggleExpand
 }) => {
   const [copied, setCopied] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [internalExpanded, setInternalExpanded] = useState(true);
+
+  const isExpanded = externalExpanded !== undefined ? externalExpanded : internalExpanded;
+  const toggleExpand = () => {
+    if (onToggleExpand) {
+      onToggleExpand();
+    } else {
+      setInternalExpanded(!internalExpanded);
+    }
+  };
 
   const safePath = cleanFilePath(filePath);
   const ext = '.' + safePath.split('.').pop()?.toLowerCase();
@@ -43,42 +58,45 @@ export const FileViewBlock: React.FC<FileViewBlockProps> = ({
   if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
 
   return (
-    <div className="terminal-card" style={{ border: '1px solid var(--cortex-grey-matter-border)' }}>
-      <div className="terminal-header" style={{ background: '#090e17' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {isImage ? <ImageIcon size={14} color="var(--cortex-insight-amber)" /> : <Eye size={14} color="var(--cortex-execution-green)" />}
-          <span style={{ color: 'var(--cortex-grey-matter)', fontSize: '11px' }}>
-            {toolAction || toolSummary || (isImage ? 'Image Viewer' : 'File Viewer')}:
-          </span>
-          <span className="mono truncate" style={{ color: 'var(--cortex-cognitive-teal)', fontWeight: 600, maxWidth: '400px' }} title={safePath}>
-            {safePath.split('/').slice(-2).join('/')}
-          </span>
-          {startLine && !isImage && (
-            <span className="mini-badge mono" style={{ background: 'rgba(255, 255, 255, 0.08)' }}>
-              lines {startLine}{endLine ? `-${endLine}` : ''}
+    <div className={`terminal-card ${hideHeader ? 'border-0' : ''}`} style={hideHeader ? { border: 'none', borderRadius: '0' } : { border: '1px solid var(--cortex-grey-matter-border)' }}>
+      {!hideHeader && (
+        <div className="terminal-header" style={{ background: '#090e17' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {isImage ? <ImageIcon size={14} color="var(--cortex-insight-amber)" /> : <Eye size={14} color="var(--cortex-execution-green)" />}
+            <span style={{ color: 'var(--cortex-grey-matter)', fontSize: '11px' }}>
+              {toolAction || toolSummary || (isImage ? 'Image Viewer' : 'File Viewer')}:
             </span>
-          )}
-          {isImage && (
-            <span className="mini-badge mono" style={{ background: 'var(--cortex-insight-amber-bg)', color: '#B45309' }}>
-              Image Asset
+            <span className="mono truncate" style={{ color: 'var(--cortex-cognitive-teal)', fontWeight: 600, maxWidth: '400px' }} title={safePath}>
+              {safePath.split('/').slice(-2).join('/')}
             </span>
-          )}
-        </div>
+            {startLine && !isImage && (
+              <span className="mini-badge mono" style={{ background: 'rgba(255, 255, 255, 0.08)' }}>
+                lines {startLine}{endLine ? `-${endLine}` : ''}
+              </span>
+            )}
+            {isImage && (
+              <span className="mini-badge mono" style={{ background: 'var(--cortex-insight-amber-bg)', color: '#B45309' }}>
+                Image Asset
+              </span>
+            )}
+          </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {!isImage && (
-            <button className="copy-btn" onClick={copyContent} title="Copy viewed file contents">
-              {copied ? <Check size={12} color="var(--cortex-execution-green)" /> : <Copy size={12} />}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {!isImage && (
+              <button className="copy-btn" onClick={copyContent} title="Copy viewed file contents">
+                {copied ? <Check size={12} color="var(--cortex-execution-green)" /> : <Copy size={12} />}
+              </button>
+            )}
+            <button
+              onClick={toggleExpand}
+              style={{ color: 'var(--cortex-grey-matter)', display: 'flex', alignItems: 'center', gap: '4px' }}
+              title={isExpanded ? 'Collapse' : 'Expand'}
+            >
+              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
-          )}
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            style={{ color: 'var(--cortex-grey-matter)', display: 'flex', alignItems: 'center', gap: '4px' }}
-          >
-            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {isExpanded && (
         isImage && conversationId ? (

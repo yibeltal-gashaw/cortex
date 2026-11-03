@@ -29,6 +29,7 @@ interface TelemetrySidebarProps {
 
 interface ChangedFileInfo {
   path: string;
+  fullPath: string;
   additions: number;
   deletions: number;
 }
@@ -78,7 +79,7 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
   };
 
   // 1. Calculate Files Changed by scanning file editing tool calls
-  const fileMap = new Map<string, { additions: number; deletions: number }>();
+  const fileMap = new Map<string, { additions: number; deletions: number; fullPath: string }>();
   session.steps.forEach((step: TimelineStep) => {
     if (step.toolCalls) {
       step.toolCalls.forEach((tc: ToolCallItem) => {
@@ -93,7 +94,7 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
           if (rawFilePath) {
             const cleanPath = cleanFilePath(rawFilePath);
             const relPath = cleanPath.split('/').slice(-2).join('/');
-            const existing = fileMap.get(relPath) || { additions: 0, deletions: 0 };
+            const existing = fileMap.get(relPath) || { additions: 0, deletions: 0, fullPath: cleanPath };
 
             if (tc.result?.diff) {
               const oldNorm = normalizeContent(tc.result.diff.oldContent || '');
@@ -118,6 +119,7 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
 
   const filesChanged: ChangedFileInfo[] = Array.from(fileMap.entries()).map(([path, diff]) => ({
     path,
+    fullPath: diff.fullPath,
     additions: diff.additions,
     deletions: diff.deletions
   }));
@@ -276,12 +278,16 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
                         selectedFile.toLowerCase().includes(file.path.toLowerCase())
                       )
                     );
+                    const parts = file.path.split('/');
+                    const fileName = parts.pop() || file.path;
+                    const dirName = parts.length > 0 ? parts.join('/') + '/' : '';
+
                     return (
                       <div
                         key={idx}
                         className={`changed-file-row interactive ${isSelected ? 'active' : ''}`}
                         onClick={() => onSelectFile?.(file.path)}
-                        title={`Click to show ${file.path} in Tool Execution & Diff Cards`}
+                        title={`Click to show ${file.fullPath || file.path} in Tool Execution & Diff Cards`}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => {
@@ -291,9 +297,12 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
                           }
                         }}
                       >
-                        <div className="file-info-left" title={file.path}>
+                        <div className="file-info-left" title={file.fullPath || file.path}>
                           <FileCode size={13} className={`file-icon ${isSelected ? 'active' : ''}`} />
-                          <span className="file-path mono truncate">{file.path}</span>
+                          <span className="file-path mono truncate">
+                            {dirName && <span style={{ opacity: 0.55 }}>{dirName}</span>}
+                            <span style={{ fontWeight: 600 }}>{fileName}</span>
+                          </span>
                         </div>
                         <div className="file-diff-counters mono">
                           {file.additions > 0 && (

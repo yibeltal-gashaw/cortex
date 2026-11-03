@@ -19,20 +19,45 @@ import {
   Search,
   X,
   Layers,
-  Radio,
   ArrowDown,
-  GitFork
+  GitFork,
+  Send
 } from 'lucide-react';
 import { marked } from 'marked';
 import { TimelineStep, ToolCallItem } from '../types/index.js';
 import { DiffViewer, normalizeContent, cleanFilePath } from './DiffViewer.js';
 import { TerminalBlock } from './TerminalBlock.js';
 import { FileViewBlock } from './FileViewBlock.js';
+import { sanitizeHtml } from '../utils/sanitizeHtml.js';
 
 interface TimelineProps {
   steps: TimelineStep[];
   conversationId?: string;
   focusedFile?: string | null;
+  sessionModel?: string;
+}
+
+function formatDurationMs(ms?: number): string | null {
+  if (ms === undefined || ms === null || isNaN(ms)) return null;
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function getStepElapsed(step: TimelineStep, prevStep?: TimelineStep): string | null {
+  if (!step.createdAt || !prevStep?.createdAt) return null;
+  try {
+    const cur = new Date(step.createdAt).getTime();
+    const prev = new Date(prevStep.createdAt).getTime();
+    if (isNaN(cur) || isNaN(prev) || cur < prev) return null;
+    const diffSec = (cur - prev) / 1000;
+    if (diffSec < 0.1) return '< 1s';
+    if (diffSec < 60) return `${diffSec.toFixed(1)}s`;
+    const mins = Math.floor(diffSec / 60);
+    const secs = Math.round(diffSec % 60);
+    return `${mins}m ${secs}s`;
+  } catch {
+    return null;
+  }
 }
 
 function formatTimeOnly(iso: string): string {
@@ -116,18 +141,27 @@ function stepMatchesSearch(step: TimelineStep, query: string): boolean {
   return false;
 }
 
-export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focusedFile }) => {
+export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focusedFile, sessionModel }) => {
   const [filterType, setFilterType] = useState<'all' | 'user' | 'thinking' | 'tools' | 'errors' | 'response'>('all');
   const [copiedStep, setCopiedStep] = useState<number | null>(null);
   const [expandedReasoning, setExpandedReasoning] = useState<Record<number, boolean>>({});
   const [fullscreenDiffKey, setFullscreenDiffKey] = useState<string | null>(null);
   const [timelineSearch, setTimelineSearch] = useState('');
   const [collapsedTurns, setCollapsedTurns] = useState<Record<number, boolean>>({});
-  const [autoScrollLocked, setAutoScrollLocked] = useState<boolean>(true);
-  const [newStepsCount, setNewStepsCount] = useState<number>(0);
+  const [collapsedToolCalls, setCollapsedToolCalls] = useState<Record<string, boolean>>({});
+  const [showJumpToLatest, setShowJumpToLatest] = useState<boolean>(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const feedRef = useRef<HTMLDivElement>(null);
   const prevStepCountRef = useRef<number>(steps.length);
+  const lastScrolledConvRef = useRef<string | null>(null);
+
+  const toggleToolCall = (toolKey: string) => {
+    setCollapsedToolCalls(prev => ({
+      ...prev,
+      [toolKey]: !prev[toolKey]
+    }));
+  };
 
   // Group steps into turns
   const { stepsWithTurns, turns } = useMemo(() => {
@@ -213,7 +247,7 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
     setExpandedReasoning(updated);
   };
 
-  // Keyboard shortcut Ctrl+F / Cmd+F to focus timeline search
+  // Keyboard shortcut Ctrl+F / Cmd+F to focus timeline search input
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
@@ -229,6 +263,12 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  const handleExecuteSearch = () => {
+    if (!timelineSearch.trim() || filteredItems.length === 0) return;
+    const firstMatch = document.querySelector('.timeline-row-group') || document.querySelector('.turn-divider-banner');
+    firstMatch?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
 
   // Auto-scroll and focus when a file is clicked from TelemetrySidebar
   useEffect(() => {
@@ -252,19 +292,24 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
     }
   }, [focusedFile]);
 
-  // Auto-scroll to bottom on live streaming updates if auto-scroll is locked
+  // By default, scroll to latest step on session load / conversation switch
+  useEffect(() => {
+    if (steps.length > 0 && lastScrolledConvRef.current !== (conversationId || 'current')) {
+      lastScrolledConvRef.current = conversationId || 'current';
+      const timer = setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [conversationId, steps.length]);
+
+  // Auto-scroll to latest step on live streaming updates
   useEffect(() => {
     if (steps.length > prevStepCountRef.current) {
-      const added = steps.length - prevStepCountRef.current;
-      if (autoScrollLocked) {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-        setNewStepsCount(0);
-      } else {
-        setNewStepsCount(prev => prev + added);
-      }
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
     prevStepCountRef.current = steps.length;
-  }, [steps.length, autoScrollLocked]);
+  }, [steps.length]);
 
   const toggleReasoning = (idx: number) => {
     setExpandedReasoning(prev => ({
@@ -321,9 +366,7 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
 
   return (
     <div className="hud-timeline-wrapper">
-      {/* 1. Primary Filter Tabs & Control Bar */}
       <div className="hud-timeline-header-bar">
-        {/* Spacious Segmented Filter Tabs */}
         <div className="timeline-tabs-track">
           <button
             className={`timeline-tab-btn ${filterType === 'all' ? 'active' : ''}`}
@@ -386,7 +429,7 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
           </button>
         </div>
 
-        {/* Right Header Utilities: Density & Follow Live */}
+        {/* Right Header Utilities: Density */}
         <div className="timeline-header-actions">
           {counts.thinking > 0 && (
             <button
@@ -398,28 +441,10 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
               <span>{allReasoningExpanded ? 'Collapse Thoughts' : 'Expand Thoughts'}</span>
             </button>
           )}
-
-          <button
-            className={`timeline-live-follow-pill ${autoScrollLocked ? 'active' : ''}`}
-            onClick={() => {
-              const next = !autoScrollLocked;
-              setAutoScrollLocked(next);
-              if (next) {
-                setNewStepsCount(0);
-                bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-              }
-            }}
-            title="Toggle automatic scrolling to latest events as agent streams"
-          >
-            <Radio size={12} className={autoScrollLocked ? 'spin-icon' : ''} />
-            <span>Follow Live {autoScrollLocked ? 'ON' : 'OFF'}</span>
-          </button>
         </div>
       </div>
 
-      {/* 2. Secondary Sub-Bar: Turns Navigation & Search */}
       <div className="hud-timeline-sub-bar">
-        {/* Turn Navigation Jumper (if multi-turn) */}
         {turns.length > 1 ? (
           <div className="turn-chips-strip">
             <span className="turn-chips-label">
@@ -447,39 +472,32 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
           </div>
         )}
 
-        {/* In-Timeline Search Box */}
-        <div className="timeline-search-box">
-          <Search size={13} className="search-box-icon" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            className="timeline-search-input mono"
-            value={timelineSearch}
-            onChange={(e) => setTimelineSearch(e.target.value)}
-            placeholder="Search feed, tools, commands, diffs (Ctrl+F)..."
-            spellCheck={false}
-          />
-          {timelineSearch ? (
+        {/* Active search filter indicator in sub-bar (if filtering) */}
+        {timelineSearch && (
+          <div className="timeline-active-search-indicator mono">
+            <span>Filter: "{timelineSearch}" ({filteredItems.length} match{filteredItems.length === 1 ? '' : 'es'})</span>
             <button
+              type="button"
               className="search-box-clear"
               onClick={() => setTimelineSearch('')}
-              title="Clear search"
+              title="Clear search filter"
             >
               <X size={12} />
             </button>
-          ) : (
-            <kbd className="timeline-kbd-hint">Ctrl+F</kbd>
-          )}
-          {timelineSearch && (
-            <span className="timeline-search-count-pill mono">
-              {filteredItems.length} match{filteredItems.length === 1 ? '' : 'es'}
-            </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Main Spine Timeline Area */}
-      <div className="hud-timeline-feed">
+      <div
+        ref={feedRef}
+        className="hud-timeline-feed"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+          setShowJumpToLatest(!isNearBottom);
+        }}
+      >
         {filteredItems.length === 0 ? (
           <div className="no-events-notice" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
             <p className="mono" style={{ fontSize: '13px' }}>
@@ -587,6 +605,11 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
               const isReasoningExpanded = expandedReasoning[step.stepIndex] !== false; // default true
               const tokenEstimate = Math.max(240, Math.round(((step.thinking?.length || 0) + 120) / 3.8));
 
+              // Compute real elapsed time since previous step
+              const stepIdxInFull = steps.findIndex(s => s.stepIndex === step.stepIndex);
+              const prevStep = stepIdxInFull > 0 ? steps[stepIdxInFull - 1] : undefined;
+              const stepElapsed = getStepElapsed(step, prevStep);
+
               return (
                 <React.Fragment key={step.stepIndex}>
                   {turnHeader}
@@ -602,26 +625,27 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
 
                 {/* Right Card Container */}
                 <div className="timeline-card-col">
-                  {/* 2a. AI Reasoning / Thought Stream Card */}
+                  {/* 2a. AI Reasoning Card */}
                   {step.thinking && (
                     <div className="hud-card card-ai-reasoning">
-                      <div className="card-top-header" onClick={() => toggleReasoning(step.stepIndex)}>
+                      <div className="card-top-header" onClick={() => toggleReasoning(step.stepIndex)} style={{ cursor: 'pointer' }}>
                         <div className="header-identity">
                           <div className="avatar-icon ai-avatar">
                             <Sparkles size={14} />
                           </div>
                           <span className="header-title">AI Reasoning</span>
-                          <div className="thought-stream-selector">
-                            <span>Thought Stream</span>
-                            <ChevronDown size={12} />
-                          </div>
+                          {sessionModel && (
+                            <span className="hud-version-badge" style={{ fontSize: '10px', padding: '1px 6px' }} title={`Agent Model: ${sessionModel}`}>
+                              {sessionModel}
+                            </span>
+                          )}
                         </div>
 
                         <div className="header-actions">
                           <span className="status-tag expanded">
                             {isReasoningExpanded ? 'Expanded' : 'Collapsed'}
                           </span>
-                          <button className="hud-toggle-chevron">
+                          <button className="hud-toggle-chevron" title={isReasoningExpanded ? 'Collapse thoughts' : 'Expand thoughts'}>
                             {isReasoningExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                           </button>
                         </div>
@@ -632,22 +656,27 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                           <div className="card-inner-body reasoning-body">
                             <div
                               className="thought-markdown markdown-body"
+                              style={{ maxWidth: '860px', lineHeight: '1.65' }}
                               dangerouslySetInnerHTML={{
-                                __html: marked.parse(step.thinking, { breaks: true, gfm: true }) as string
+                                __html: sanitizeHtml(marked.parse(step.thinking, { breaks: true, gfm: true }) as string)
                               }}
                             />
                           </div>
 
                           {/* Footer Metadata Bar */}
                           <div className="card-footer-meta-bar mono">
-                            <span>Model: cortex-4</span>
+                            <span>Model: {sessionModel || 'Agent Model'}</span>
                             <span className="meta-sep">|</span>
                             <span>
                               Tokens: {(step.tokenMetrics?.totalTokens ?? tokenEstimate).toLocaleString()}
                               {step.tokenMetrics?.cacheReadTokens ? ` (${step.tokenMetrics.cacheReadTokens.toLocaleString()} cached)` : ''}
                             </span>
-                            <span className="meta-sep">|</span>
-                            <span>Time: {(Math.random() * 2 + 1.2).toFixed(1)}s</span>
+                            {stepElapsed && (
+                              <>
+                                <span className="meta-sep">|</span>
+                                <span title="Elapsed time since previous step">Time: {stepElapsed}</span>
+                              </>
+                            )}
                           </div>
                         </>
                       )}
@@ -657,6 +686,8 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                   {/* 2b. Tool Executions */}
                   {step.toolCalls && step.toolCalls.map((tc: ToolCallItem, tcIdx: number) => {
                     const toolName = tc.name;
+                    const toolKey = `${step.stepIndex}-${tcIdx}`;
+                    const isToolExpanded = !collapsedToolCalls[toolKey];
 
                     const isEditTool =
                       toolName === 'replace_file_content' ||
@@ -673,7 +704,7 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                       const rawNew = diff?.newContent ?? (isWrite ? (tc.args.Content ?? tc.args.CodeContent ?? '') : (tc.args.Replacement ?? tc.args.ReplacementContent ?? tc.args.Content ?? tc.args.CodeContent ?? ''));
                       const normalizedOld = normalizeContent(rawOld);
                       const normalizedNew = normalizeContent(rawNew);
-                      const addedLines = normalizedNew ? normalizedNew.split('\n').length : 18;
+                      const addedLines = normalizedNew ? normalizedNew.split('\n').filter(Boolean).length : 0;
 
                       const rawTarget = diff?.targetFile || tc.args.Path || tc.args.TargetFile || tc.args.path || 'src/services/auth.service.ts';
                       const targetFilePath = cleanFilePath(rawTarget);
@@ -688,7 +719,7 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                         )
                       );
 
-                      const diffKey = `${step.stepIndex}-${tcIdx}`;
+                      const diffKey = toolKey;
                       const isDiffFullscreen = fullscreenDiffKey === diffKey;
 
                       return (
@@ -698,37 +729,51 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                           data-target-file={targetFilePath}
                           id={`diff-card-${encodeURIComponent(baseTarget)}-${tcIdx}`}
                         >
-                          <div className="card-top-header">
+                          <div className="card-top-header" onClick={() => toggleToolCall(diffKey)} style={{ cursor: 'pointer' }}>
                             <div className="header-identity">
                               <div className="avatar-icon tool-success-avatar">
                                 <CheckCircle2 size={14} />
                               </div>
                               <span className="header-title">Tool Execution: {isWrite ? 'Write File' : 'Edit File'}</span>
+                              <span className="file-target-tag mono truncate" style={{ maxWidth: '320px' }} title={targetFilePath}>
+                                {targetFilePath.split('/').slice(-2).join('/')}
+                              </span>
                             </div>
 
                             <div className="header-actions">
-                              <span className="tool-lines-badge mono">+{addedLines} lines</span>
+                              {addedLines > 0 && <span className="tool-lines-badge mono">+{addedLines} lines</span>}
+                              {formatDurationMs(tc.result?.durationMs) && (
+                                <span className="tool-runtime-badge mono">{formatDurationMs(tc.result?.durationMs)}</span>
+                              )}
                               <button
                                 className={`hud-icon-btn ${isDiffFullscreen ? 'active' : ''}`}
                                 title={isDiffFullscreen ? "Exit Fullscreen (Esc)" : "Expand Fullscreen"}
-                                onClick={() => setFullscreenDiffKey(isDiffFullscreen ? null : diffKey)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setFullscreenDiffKey(isDiffFullscreen ? null : diffKey);
+                                }}
                               >
                                 {isDiffFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                              </button>
+                              <button className="hud-toggle-chevron" title={isToolExpanded ? 'Collapse diff' : 'Expand diff'}>
+                                {isToolExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                               </button>
                             </div>
                           </div>
 
-                          <div className="card-inner-body p-0">
-                            <DiffViewer
-                              targetFile={targetFilePath}
-                              oldContent={normalizedOld}
-                              newContent={normalizedNew}
-                              startLine={diff?.startLine || (tc.args.StartLine ? parseInt(String(tc.args.StartLine), 10) : (isWrite ? 1 : 1))}
-                              endLine={diff?.endLine || (tc.args.EndLine ? parseInt(String(tc.args.EndLine), 10) : undefined)}
-                              isFullscreen={isDiffFullscreen}
-                              onToggleFullscreen={() => setFullscreenDiffKey(isDiffFullscreen ? null : diffKey)}
-                            />
-                          </div>
+                          {isToolExpanded && (
+                            <div className="card-inner-body p-0">
+                              <DiffViewer
+                                targetFile={targetFilePath}
+                                oldContent={normalizedOld}
+                                newContent={normalizedNew}
+                                startLine={diff?.startLine || (tc.args.StartLine ? parseInt(String(tc.args.StartLine), 10) : (isWrite ? 1 : 1))}
+                                endLine={diff?.endLine || (tc.args.EndLine ? parseInt(String(tc.args.EndLine), 10) : undefined)}
+                                isFullscreen={isDiffFullscreen}
+                                onToggleFullscreen={() => setFullscreenDiffKey(isDiffFullscreen ? null : diffKey)}
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     }
@@ -737,38 +782,50 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                     if (toolName === 'run_command') {
                       const exitCode = tc.result?.exitCode;
                       const isSuccess = exitCode === undefined || exitCode === 0;
+                      const displayCmd = (tc.args.CommandLine || tc.args.command || '').trim().replace(/^"|"$/g, '');
 
                       return (
                         <div key={tcIdx} className="hud-card card-tool-execution">
-                          <div className="card-top-header">
+                          <div className="card-top-header" onClick={() => toggleToolCall(toolKey)} style={{ cursor: 'pointer' }}>
                             <div className="header-identity">
                               <div className="avatar-icon terminal-avatar">
                                 <Terminal size={14} />
                               </div>
                               <span className="header-title">Tool Execution: Terminal Command</span>
+                              {displayCmd && (
+                                <span className="file-target-tag mono truncate" style={{ maxWidth: '280px' }} title={displayCmd}>
+                                  $ {displayCmd}
+                                </span>
+                              )}
                             </div>
 
                             <div className="header-actions">
                               <span className={`status-tag ${isSuccess ? 'success' : 'error'}`}>
                                 {isSuccess ? 'Success' : `Exit ${exitCode}`}
                               </span>
-                              <span className="tool-runtime-badge mono">3.1s</span>
-                              <button className="hud-toggle-chevron">
-                                <ChevronDown size={14} />
+                              {formatDurationMs(tc.result?.durationMs) && (
+                                <span className="tool-runtime-badge mono">{formatDurationMs(tc.result?.durationMs)}</span>
+                              )}
+                              <button className="hud-toggle-chevron" title={isToolExpanded ? 'Collapse terminal' : 'Expand terminal'}>
+                                {isToolExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                               </button>
                             </div>
                           </div>
 
-                          <div className="card-inner-body p-0">
-                            <TerminalBlock
-                              commandLine={tc.args.CommandLine || tc.args.command || ''}
-                              cwd={tc.args.Cwd || tc.args.cwd}
-                              exitCode={exitCode}
-                              content={tc.result?.content}
-                              toolAction={tc.args.toolAction}
-                              toolSummary={tc.args.toolSummary}
-                            />
-                          </div>
+                          {isToolExpanded && (
+                            <div className="card-inner-body p-0">
+                              <TerminalBlock
+                                hideHeader={true}
+                                commandLine={tc.args.CommandLine || tc.args.command || ''}
+                                cwd={tc.args.Cwd || tc.args.cwd}
+                                exitCode={exitCode}
+                                content={tc.result?.content}
+                                toolAction={tc.args.toolAction}
+                                toolSummary={tc.args.toolSummary}
+                                isExpanded={true}
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     }
@@ -777,39 +834,54 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                     if (toolName === 'view_file' || toolName === 'read_file') {
                       const vf = tc.result?.viewedFile;
                       const rawPath = vf?.path || tc.args.Path || tc.args.AbsolutePath || tc.args.path || '';
+                      const safePath = cleanFilePath(rawPath);
                       const startLine = vf?.startLine || (tc.args.StartLine ? parseInt(String(tc.args.StartLine), 10) : undefined);
                       const endLine = vf?.endLine || (tc.args.EndLine ? parseInt(String(tc.args.EndLine), 10) : undefined);
                       const content = vf?.content || tc.result?.content || '';
 
                       return (
                         <div key={tcIdx} className="hud-card card-tool-execution">
-                          <div className="card-top-header">
+                          <div className="card-top-header" onClick={() => toggleToolCall(toolKey)} style={{ cursor: 'pointer' }}>
                             <div className="header-identity">
                               <div className="avatar-icon file-avatar">
                                 <FileCode size={14} />
                               </div>
                               <span className="header-title">Tool Execution: {toolName === 'read_file' ? 'Read File' : 'View File'}</span>
+                              <span className="file-target-tag mono truncate" style={{ maxWidth: '280px' }} title={safePath}>
+                                {safePath.split('/').slice(-2).join('/')}
+                              </span>
+                              {startLine && (
+                                <span className="mini-badge mono" style={{ fontSize: '10px' }}>
+                                  lines {startLine}{endLine ? `-${endLine}` : ''}
+                                </span>
+                              )}
                             </div>
 
                             <div className="header-actions">
-                              <span className="tool-runtime-badge mono">1.8s</span>
-                              <button className="hud-toggle-chevron">
-                                <ChevronDown size={14} />
+                              {formatDurationMs(tc.result?.durationMs) && (
+                                <span className="tool-runtime-badge mono">{formatDurationMs(tc.result?.durationMs)}</span>
+                              )}
+                              <button className="hud-toggle-chevron" title={isToolExpanded ? 'Collapse file view' : 'Expand file view'}>
+                                {isToolExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                               </button>
                             </div>
                           </div>
 
-                          <div className="card-inner-body p-0">
-                            <FileViewBlock
-                              filePath={cleanFilePath(rawPath)}
-                              startLine={startLine}
-                              endLine={endLine}
-                              content={content}
-                              toolAction={tc.args.toolAction}
-                              toolSummary={tc.args.toolSummary}
-                              conversationId={conversationId}
-                            />
-                          </div>
+                          {isToolExpanded && (
+                            <div className="card-inner-body p-0">
+                              <FileViewBlock
+                                hideHeader={true}
+                                filePath={safePath}
+                                startLine={startLine}
+                                endLine={endLine}
+                                content={content}
+                                toolAction={tc.args.toolAction}
+                                toolSummary={tc.args.toolSummary}
+                                conversationId={conversationId}
+                                isExpanded={true}
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     }
@@ -823,7 +895,7 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
 
                       return (
                         <div key={tcIdx} className="hud-card card-tool-execution" style={{ borderColor: 'rgba(139, 92, 246, 0.4)' }}>
-                          <div className="card-top-header" style={{ background: 'rgba(139, 92, 246, 0.08)' }}>
+                          <div className="card-top-header" onClick={() => toggleToolCall(toolKey)} style={{ background: 'rgba(139, 92, 246, 0.08)', cursor: 'pointer' }}>
                             <div className="header-identity">
                               <div className="avatar-icon ai-avatar" style={{ background: 'var(--cortex-synapse-purple)', color: '#ffffff' }}>
                                 <GitFork size={14} />
@@ -842,20 +914,25 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                               <span className={`status-tag ${isSuccess ? 'success' : 'error'}`}>
                                 {isSuccess ? 'Subagent Dispatched' : 'Failed'}
                               </span>
+                              <button className="hud-toggle-chevron" title={isToolExpanded ? 'Collapse subagent' : 'Expand subagent'}>
+                                {isToolExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                              </button>
                             </div>
                           </div>
 
-                          <div className="card-inner-body" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'var(--bg-main)', padding: '10px 12px', borderRadius: '6px', border: '1px solid var(--border-subtle)', lineHeight: '1.5' }}>
-                              <span style={{ fontWeight: 600, color: 'var(--cortex-deep-thought)', display: 'block', marginBottom: '4px' }}>Delegated Objective:</span>
-                              {prompt}
-                            </div>
-                            {tc.result?.content && (
-                              <div className="terminal-output" style={{ maxHeight: '140px', fontSize: '11px' }}>
-                                {tc.result.content}
+                          {isToolExpanded && (
+                            <div className="card-inner-body" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'var(--bg-main)', padding: '10px 12px', borderRadius: '6px', border: '1px solid var(--border-subtle)', lineHeight: '1.5' }}>
+                                <span style={{ fontWeight: 600, color: 'var(--cortex-deep-thought)', display: 'block', marginBottom: '4px' }}>Delegated Objective:</span>
+                                {prompt}
                               </div>
-                            )}
-                          </div>
+                              {tc.result?.content && (
+                                <div className="terminal-output" style={{ maxHeight: '140px', fontSize: '11px' }}>
+                                  {tc.result.content}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     }
@@ -865,7 +942,7 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                       const query = tc.args.query || tc.args.Query || tc.args.Url || tc.args.url || '';
                       return (
                         <div key={tcIdx} className="hud-card card-tool-execution">
-                          <div className="card-top-header">
+                          <div className="card-top-header" onClick={() => toggleToolCall(toolKey)} style={{ cursor: 'pointer' }}>
                             <div className="header-identity">
                               <div className="avatar-icon web-avatar">
                                 <Globe size={14} />
@@ -877,20 +954,27 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
 
                             <div className="header-actions">
                               <span className="status-tag success">Completed</span>
-                              <span className="tool-runtime-badge mono">1.6s</span>
+                              {formatDurationMs(tc.result?.durationMs) && (
+                                <span className="tool-runtime-badge mono">{formatDurationMs(tc.result?.durationMs)}</span>
+                              )}
+                              <button className="hud-toggle-chevron" title={isToolExpanded ? 'Collapse web search' : 'Expand web search'}>
+                                {isToolExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                              </button>
                             </div>
                           </div>
 
-                          <div className="card-inner-body">
-                            <div className="web-search-query mono">
-                              {query}
-                            </div>
-                            {tc.result?.content && (
-                              <div className="terminal-output" style={{ maxHeight: '180px', marginTop: '8px' }}>
-                                {tc.result.content}
+                          {isToolExpanded && (
+                            <div className="card-inner-body">
+                              <div className="web-search-query mono">
+                                {query}
                               </div>
-                            )}
-                          </div>
+                              {tc.result?.content && (
+                                <div className="terminal-output" style={{ maxHeight: '180px', marginTop: '8px' }}>
+                                  {tc.result.content}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     }
@@ -898,28 +982,35 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                     // Fallback generic tool
                     return (
                       <div key={tcIdx} className="hud-card card-tool-execution">
-                        <div className="card-top-header">
+                        <div className="card-top-header" onClick={() => toggleToolCall(toolKey)} style={{ cursor: 'pointer' }}>
                           <div className="header-identity">
                             <div className="avatar-icon generic-tool-avatar">
                               <Wrench size={14} />
                             </div>
                             <span className="header-title">Tool Execution: {toolName}</span>
                           </div>
-                          <span className="status-tag success">Executed</span>
+                          <div className="header-actions">
+                            <span className="status-tag success">Executed</span>
+                            <button className="hud-toggle-chevron" title={isToolExpanded ? 'Collapse tool' : 'Expand tool'}>
+                              {isToolExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </button>
+                          </div>
                         </div>
 
-                        <div className="card-inner-body">
-                          {tc.args && Object.keys(tc.args).length > 0 && (
-                            <pre className="mono" style={{ fontSize: '11px', color: '#64748b', margin: 0, whiteSpace: 'pre-wrap' }}>
-                              {JSON.stringify(tc.args, null, 2)}
-                            </pre>
-                          )}
-                          {tc.result?.content && (
-                            <div className="terminal-output" style={{ maxHeight: '180px', marginTop: '8px' }}>
-                              {tc.result.content}
-                            </div>
-                          )}
-                        </div>
+                        {isToolExpanded && (
+                          <div className="card-inner-body">
+                            {tc.args && Object.keys(tc.args).length > 0 && (
+                              <pre className="mono" style={{ fontSize: '11px', color: '#64748b', margin: 0, whiteSpace: 'pre-wrap' }}>
+                                {JSON.stringify(tc.args, null, 2)}
+                              </pre>
+                            )}
+                            {tc.result?.content && (
+                              <div className="terminal-output" style={{ maxHeight: '180px', marginTop: '8px' }}>
+                                {tc.result.content}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -946,7 +1037,7 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                       <div
                         className="card-inner-body markdown-body"
                         dangerouslySetInnerHTML={{
-                          __html: marked.parse(preprocessMarkdownImages(step.assistantResponse, conversationId), { breaks: true, gfm: true }) as string
+                          __html: sanitizeHtml(marked.parse(preprocessMarkdownImages(step.assistantResponse, conversationId), { breaks: true, gfm: true }) as string)
                         }}
                       />
                     </div>
@@ -962,46 +1053,86 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
         <div ref={bottomRef} style={{ height: 1 }} />
       </div>
 
-      {/* Floating Jump to Latest Button */}
-      {newStepsCount > 0 && !autoScrollLocked && (
+      {/* Floating Jump to Latest Button (visible when user scrolls up) */}
+      {showJumpToLatest && (
         <button
+          type="button"
           className="hud-jump-latest-btn"
           onClick={() => {
-            setAutoScrollLocked(true);
-            setNewStepsCount(0);
             bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+            setShowJumpToLatest(false);
           }}
-          title="Jump to newest live streamed steps"
+          title="Jump to latest step"
         >
           <ArrowDown size={14} />
-          <span>Jump to latest ({newStepsCount} new)</span>
+          <span>Jump to latest</span>
         </button>
       )}
 
-      {/* 3. Floating Bottom Prompt Input Bar */}
-      {/* <div className="hud-bottom-input-bar">
-        <button className="input-attach-btn" title="Attach file or context">
-          <Paperclip size={16} />
-        </button>
-        <input
-          type="text"
-          className="hud-prompt-input"
-          placeholder="Ask Cortex anything..."
-          value={promptInput}
-          onChange={(e) => setPromptInput(e.target.value)}
-        />
+      {/* 3. Floating Bottom Search Input Bar (ChatGPT-style) */}
+      <div className="hud-bottom-input-bar" role="search">
         <button
-          className={`input-send-btn ${promptInput.trim() ? 'active' : ''}`}
-          title="Send instruction to Cortex"
-          onClick={() => {
-            if (promptInput.trim()) {
-              setPromptInput('');
+          type="button"
+          className="input-attach-btn"
+          title="Search timeline feed (Ctrl+F)"
+          onClick={() => searchInputRef.current?.focus()}
+        >
+          <Search size={16} />
+        </button>
+
+        <input
+          ref={searchInputRef}
+          type="text"
+          className="hud-prompt-input mono"
+          placeholder="Search feed, tools, commands, diffs (Ctrl+F)..."
+          value={timelineSearch}
+          onChange={(e) => setTimelineSearch(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setTimelineSearch('');
+              searchInputRef.current?.blur();
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              handleExecuteSearch();
             }
           }}
+          spellCheck={false}
+          aria-label="Search timeline feed"
+        />
+
+        {timelineSearch ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span className="hud-bottom-match-pill mono">
+              {filteredItems.length} match{filteredItems.length === 1 ? '' : 'es'}
+            </span>
+            <button
+              type="button"
+              className="input-clear-btn"
+              onClick={() => {
+                setTimelineSearch('');
+                searchInputRef.current?.focus();
+              }}
+              title="Clear search query"
+              aria-label="Clear search query"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <kbd className="timeline-kbd-hint">Ctrl+F</kbd>
+        )}
+
+        <button
+          type="button"
+          className={`input-send-btn ${timelineSearch.trim() ? 'active' : ''}`}
+          title={timelineSearch.trim() ? "Execute search / jump to result (Enter)" : "Search timeline"}
+          onClick={handleExecuteSearch}
+          disabled={!timelineSearch.trim()}
+          aria-label="Execute search"
         >
           <Send size={15} />
         </button>
-      </div> */}
+      </div>
     </div>
   );
 };

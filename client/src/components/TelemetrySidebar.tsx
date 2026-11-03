@@ -19,11 +19,13 @@ import {
 } from 'lucide-react';
 import { ParsedConversationSession, TimelineStep, ToolCallItem } from '../types/index.js';
 import { cleanFilePath, normalizeContent } from './DiffViewer.js';
+import { TerminalCommandLogModal } from './TerminalCommandLogModal.js';
 
 interface TelemetrySidebarProps {
   session: ParsedConversationSession | null;
   selectedFile?: string | null;
   onSelectFile?: (filePath: string) => void;
+  onJumpToStep?: (stepIndex: number) => void;
   onClose?: () => void;
 }
 
@@ -38,11 +40,13 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
   session,
   selectedFile,
   onSelectFile,
+  onJumpToStep,
   onClose
 }) => {
   const [activeTab, setActiveTab] = useState<'details' | 'telemetry'>('details');
   const [copiedId, setCopiedId] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
+  const [isTerminalModalOpen, setIsTerminalModalOpen] = useState(false);
 
   if (!session) {
     return (
@@ -347,15 +351,33 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
                       return <Wrench size={13} className="tool-icon" />;
                     };
 
+                    const isTerminalTool = toolName === 'run_command' || toolName.includes('command');
+
                     return (
-                      <div key={idx} className="tool-used-row">
+                      <div
+                        key={idx}
+                        className={`tool-used-row ${isTerminalTool ? 'interactive clickable' : ''}`}
+                        onClick={isTerminalTool ? () => setIsTerminalModalOpen(true) : undefined}
+                        title={isTerminalTool ? `Click to inspect all ${count} terminal command executions and output logs` : undefined}
+                        role={isTerminalTool ? 'button' : undefined}
+                        tabIndex={isTerminalTool ? 0 : undefined}
+                        onKeyDown={isTerminalTool ? (e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setIsTerminalModalOpen(true);
+                          }
+                        } : undefined}
+                      >
                         <div className="tool-info-left">
                           {getToolIcon(toolName)}
                           <span className="tool-name">{formatToolName(toolName)}</span>
                         </div>
-                        <span className="tool-duration-badge mono">
-                          {count} call{count > 1 ? 's' : ''}
-                        </span>
+                        <div className="tool-info-right">
+                          <span className="tool-duration-badge mono">
+                            {count} call{count > 1 ? 's' : ''}
+                          </span>
+                          {isTerminalTool && <ArrowUpRight size={12} className="jump-icon" />}
+                        </div>
                       </div>
                     );
                   })
@@ -465,6 +487,14 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
           </div>
         )}
       </div>
+
+      {/* Terminal Command Log Modal */}
+      <TerminalCommandLogModal
+        isOpen={isTerminalModalOpen}
+        onClose={() => setIsTerminalModalOpen(false)}
+        session={session}
+        onJumpToStep={onJumpToStep}
+      />
     </aside>
   );
 };

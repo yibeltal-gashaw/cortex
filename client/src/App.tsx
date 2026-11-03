@@ -584,6 +584,11 @@ const AppContent: React.FC = () => {
                   setIsTelemetryOpen(false);
                 }
               }}
+              onJumpToStep={(_stepIndex) => {
+                if (activeSubTab !== 'timeline') {
+                  setActiveSubTab('timeline');
+                }
+              }}
               onClose={() => setIsTelemetryOpen(false)}
             />
           )}

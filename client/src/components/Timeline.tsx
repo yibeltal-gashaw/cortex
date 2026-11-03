@@ -555,7 +555,7 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
               return (
                 <React.Fragment key={step.stepIndex}>
                   {turnHeader}
-                  <div className="timeline-row-group">
+                  <div className="timeline-row-group" id={`timeline-step-${step.stepIndex}`} data-step-index={step.stepIndex}>
                     {/* Left Spine: Timestamp + Node Dot */}
                     <div className="timeline-spine-col">
                       <span className="spine-timestamp mono">{timeStr}</span>
@@ -613,7 +613,7 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
               return (
                 <React.Fragment key={step.stepIndex}>
                   {turnHeader}
-                  <div className="timeline-row-group">
+                  <div className="timeline-row-group" id={`timeline-step-${step.stepIndex}`} data-step-index={step.stepIndex}>
                 {/* Left Spine: Timestamp + Node Dot */}
                 <div className="timeline-spine-col">
                   <span className="spine-timestamp mono">{timeStr}</span>
@@ -785,7 +785,11 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                       const displayCmd = (tc.args.CommandLine || tc.args.command || '').trim().replace(/^"|"$/g, '');
 
                       return (
-                        <div key={tcIdx} className="hud-card card-tool-execution">
+                        <div
+                          key={tcIdx}
+                          id={`tool-run-cmd-${step.stepIndex}-${tcIdx}`}
+                          className="hud-card card-tool-execution"
+                        >
                           <div className="card-top-header" onClick={() => toggleToolCall(toolKey)} style={{ cursor: 'pointer' }}>
                             <div className="header-identity">
                               <div className="avatar-icon terminal-avatar">
@@ -840,7 +844,11 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                       const content = vf?.content || tc.result?.content || '';
 
                       return (
-                        <div key={tcIdx} className="hud-card card-tool-execution">
+                        <div
+                          key={tcIdx}
+                          id={`tool-view-file-${step.stepIndex}-${tcIdx}`}
+                          className="hud-card card-tool-execution"
+                        >
                           <div className="card-top-header" onClick={() => toggleToolCall(toolKey)} style={{ cursor: 'pointer' }}>
                             <div className="header-identity">
                               <div className="avatar-icon file-avatar">
@@ -941,7 +949,11 @@ export const Timeline: React.FC<TimelineProps> = ({ steps, conversationId, focus
                     if (toolName === 'search_web' || toolName === 'read_url_content') {
                       const query = tc.args.query || tc.args.Query || tc.args.Url || tc.args.url || '';
                       return (
-                        <div key={tcIdx} className="hud-card card-tool-execution">
+                        <div
+                          key={tcIdx}
+                          id={`tool-view-file-${step.stepIndex}-${tcIdx}`}
+                          className="hud-card card-tool-execution"
+                        >
                           <div className="card-top-header" onClick={() => toggleToolCall(toolKey)} style={{ cursor: 'pointer' }}>
                             <div className="header-identity">
                               <div className="avatar-icon web-avatar">
